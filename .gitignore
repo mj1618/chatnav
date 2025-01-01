@@ -1,3 +1,6 @@
+build.crx
+build.pem
+
 # Logs
 logs
 *.log
@@ -24,3 +27,4 @@ build
 *.njsproj
 *.sln
 *.sw?
+
