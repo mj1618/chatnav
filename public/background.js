@@ -1,20 +1,14 @@
 
-function show () {
-  
-  console.log("background.js", new Date().toISOString());
-
-
-}
-
-setInterval(show, 1000);
-
 chrome.runtime.onMessage.addListener(
-  function(request, sender, sendResponse) {
-    console.log(sender.tab ?
-                "from a content script:" + sender.tab.url :
-                "from the extension:", JSON.stringify(request));
-    if (request.greeting === "hello")
-      sendResponse({farewell: "goodbye"});
+  function(message, sender, sendResponse) {
+    console.log("background receivedmessage", message);
+    if (message.type === "mic-permission-denied") {
+      console.log("mic-permission-denied", message);
+
+      chrome.tabs.create({
+        url: 'request-mic.html'
+      });
+    }
   }
 );
 
@@ -23,3 +17,4 @@ chrome.offscreen.createDocument({
   reasons: ['CLIPBOARD'],
   justification: 'testing the offscreen API',
 });
+

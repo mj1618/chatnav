@@ -6,23 +6,18 @@ declare global {
 
 function App() {
   useEffect(() => {
-    (chrome as any).windows.getAll({ populate: true }, function (windows: any) {
-      windows.forEach(function (window: any) {
-        window.tabs.forEach(function (tab: any) {
-          //collect all of the urls here, I will just log them instead
-          console.log(tab);
-        });
-      });
+    chrome.runtime.onMessage.addListener(function (
+      request: any,
+      sender: any,
+      _: any
+    ) {
+      console.log(
+        sender.tab
+          ? "from a content script:" + sender.tab.url
+          : "from the extension:",
+        JSON.stringify(request)
+      );
     });
-    (async () => {
-      // see the note below on how to choose currentWindow or lastFocusedWindow
-      const [tab] = await chrome.tabs.query({
-        active: true,
-        lastFocusedWindow: true,
-      });
-      console.log(tab);
-      // ..........
-    })();
   }, []);
 
   return (

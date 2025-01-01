@@ -11,7 +11,11 @@
     "windows",
     "activeTab",
     "offscreen",
-    "background"
+    "background",
+    "audioCapture",
+    "notifications",
+    "tts",
+    "ttsEngine"
   ],
   "background": {
     "service_worker": "background.js",
@@ -19,5 +23,20 @@
   },
   "host_permissions": [
     "*://*/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self';",
+    "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval'; child-src 'self';"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "https://cdn.jsdelivr.net/npm/@deepgram/sdk"
+      ],
+      "matches": [
+        "https://*/*",
+        "http://*/*"
+      ]
+    }
   ]
 }
