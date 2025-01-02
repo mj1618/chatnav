@@ -54,7 +54,9 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   } else if (message.type === "stop-mic") {
     stop();
   } else if (message.type === "start-mic") {
-    start();
+    if(!isMicOn) {
+      start();
+    }
   } else if (message.type === "request-mic-status") {
     console.log("sending mic status", isMicOn);
     chrome.runtime.sendMessage({

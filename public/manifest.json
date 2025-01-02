@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "React Chrome Extension",
+  "name": "Scroll Control",
   "version": "1.0.1",
-  "description": "A simple React app as a Chrome extension",
+  "description": "Browse the web with your voice",
   "action": {
     "default_popup": "index.html"
   },
@@ -14,7 +14,8 @@
     "background",
     "notifications",
     "tts",
-    "ttsEngine"
+    "ttsEngine",
+    "storage"
   ],
   "background": {
     "service_worker": "background.js",
@@ -29,9 +30,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": [
-        "https://cdn.jsdelivr.net/npm/@deepgram/sdk"
-      ],
+      "resources": [],
       "matches": [
         "https://*/*",
         "http://*/*"

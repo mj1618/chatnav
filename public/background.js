@@ -1,13 +1,36 @@
+let triedPermission = false;
+let tabId;
+
+function createRecordTab() {
+  chrome.tabs.create(
+    {
+      url: chrome.runtime.getURL("record.html"),
+      pinned: true,
+      active: false,
+    },
+    (tab) => {
+      chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
+        if (tabId === tab.id && changeInfo.status === "complete") {
+          tabId = tab.id;
+          chrome.tabs.onUpdated.removeListener(listener);
+        }
+      });
+    }
+  );
+}
 
 chrome.runtime.onMessage.addListener(
   function(message, sender, sendResponse) {
     console.log("background receivedmessage", JSON.stringify(message, null, 2));
     if (message.type === "mic-permission-denied") {
       console.log("mic-permission-denied", message);
-
       // chrome.tabs.create({
       //   url: 'request-mic.html'
       // });
+      if(triedPermission) {
+        return;
+      }
+      triedPermission = true;
       chrome.tabs.update(sender.tab.id, {
         active: true,
       });
@@ -33,6 +56,18 @@ chrome.runtime.onMessage.addListener(
         });
       
       }
+    } else if(message.type === "start-mic") {
+      if(tabId!=null) {
+        chrome.tabs.query({id: tabId}, (tabs) => {
+          if(tabs.length > 0) {
+            console.log("tab already exists");
+          } else {
+            createRecordTab();
+          }
+        });
+      } else {
+        createRecordTab();
+      }
     }
   }
 );
@@ -42,18 +77,3 @@ chrome.runtime.onMessage.addListener(
 //   reasons: ['CLIPBOARD'],
 //   justification: 'testing the offscreen API',
 // });
-
-chrome.tabs.create(
-  {
-    url: chrome.runtime.getURL("record.html"),
-    pinned: true,
-    active: false,
-  },
-  (tab) => {
-    chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
-      if (tabId === tab.id && changeInfo.status === "complete") {
-        chrome.tabs.onUpdated.removeListener(listener);
-      }
-    });
-  }
-);
