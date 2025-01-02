@@ -11,6 +11,7 @@ function App() {
   const [chosenDevice, setChosenDevice] = useState<any>(null);
   const [isMicOn, setIsMicOn] = useState<boolean>(false);
   const [speeches, setSpeeches] = useState<any>([]);
+  const [interimResult, setInterimResult] = useState<any>("");
 
   useEffect(() => {
     chrome.runtime.onMessage.addListener(function (
@@ -20,18 +21,24 @@ function App() {
     ) {
       console.log("request", request);
       if (request.type === "devices") {
-        console.log("devices", request.devices);
-        console.log("chosenDevice", request.chosenDevice);
-        setDevices(request.devices);
-        setChosenDevice(request.chosenDevice);
+        if (request.devices != null && request.devices.length > 0) {
+          console.log("devices", request.devices);
+          console.log("chosenDevice", request.chosenDevice);
+          setDevices(request.devices);
+          setChosenDevice(request.chosenDevice);
+        }
       } else if (request.type === "mic-turned-on") {
         setIsMicOn(true);
       } else if (request.type === "mic-turned-off") {
         setIsMicOn(false);
       } else if (request.type === "speech-final") {
         setSpeeches((speeches: any) => [...speeches, request.message]);
+        setInterimResult("");
       } else if (request.type === "speech-finals") {
         setSpeeches(() => request.messages);
+        setInterimResult("");
+      } else if (request.type === "interim-results") {
+        setInterimResult(request.message);
       }
     });
 
@@ -72,31 +79,43 @@ function App() {
   };
 
   return (
-    <div className="w-[300px] h-[500px] ">
-      <h1 className="text-3xl font-bold underline p-8">Hello world!</h1>
+    <div className="w-[300px] h-[500px] p-8">
+      <h1 className="text-2xl font-bold">Scroll Control</h1>
       <div>
-        <h2>Devices</h2>
         {/* <ul>
           {devices.map((device: any) => (
             <li key={device.deviceId}>{device.label}</li>
           ))}
         </ul> */}
 
-        <select value={chosenDevice?.deviceId} onChange={handleDeviceChange}>
-          {devices.map((device: any) => (
-            <option key={device.deviceId} value={device.deviceId}>
-              {device.label}
-            </option>
-          ))}
-        </select>
+        {devices.length > 0 && (
+          <>
+            <h2>Devices</h2>
+            <select
+              value={chosenDevice?.deviceId}
+              onChange={handleDeviceChange}
+            >
+              {devices.map((device: any) => (
+                <option key={device.deviceId} value={device.deviceId}>
+                  {device.label}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
 
-        <button onClick={handleMicToggle}>
+        <button
+          className="bg-blue-500 text-white p-2 rounded-md w-full"
+          onClick={handleMicToggle}
+        >
           {isMicOn ? "Turn off mic" : "Turn on mic"}
         </button>
 
         {speeches.map((speech: any) => (
           <p key={speech}>{speech}</p>
         ))}
+
+        <p>{interimResult}</p>
       </div>
     </div>
   );

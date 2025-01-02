@@ -12,7 +12,6 @@
     "activeTab",
     "offscreen",
     "background",
-    "audioCapture",
     "notifications",
     "tts",
     "ttsEngine"

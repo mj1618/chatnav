@@ -7,9 +7,15 @@ let chosenDevice;
 let allDevices;
 let isMicOn = false;
 let speeches = [];
+let recognition;
+let triedPermission = false;
 
-function stopAll() {
+
+function stop() {
   try {
+    if(recognition) {
+      recognition.stop();
+    }
     mediaRecorder.stop();
     mediaRecorder.stream.getTracks().forEach((track) => {
       track.stop();
@@ -28,30 +34,16 @@ function stopAll() {
   }
 }
 
-function startMic() {
-  if (chosenDevice) {
-    startDeepgram();
-    return;
-  }
-  navigator.mediaDevices.enumerateDevices().then(function (devices) {
-    console.log("devices", devices.map((d) => d.label));
-    console.log("devices", devices);
-    chosenDevice = devices[0];
-    allDevices = devices;
-    startDeepgram();
-  });
-}
-
-startMic();
+start();
 
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   if (message.type === "mic-permission-granted") {
-    startMic();
+    start();
   } else if (message.type === "set-device") {
     chosenDevice = message.device;
     if(isMicOn) {
-      stopAll();
-      startDeepgram();
+      stop();
+      start();
     }
   } else if (message.type === "request-devices") {
     chrome.runtime.sendMessage({
@@ -60,9 +52,9 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
       chosenDevice: chosenDevice,
     });
   } else if (message.type === "stop-mic") {
-    stopAll();
+    stop();
   } else if (message.type === "start-mic") {
-    startDeepgram();
+    start();
   } else if (message.type === "request-mic-status") {
     console.log("sending mic status", isMicOn);
     chrome.runtime.sendMessage({
@@ -73,6 +65,7 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
       type: "speech-finals",
       messages: speeches,
     });
+  } else if (message.type === "interim-results") {
   }
 });
 
@@ -90,6 +83,10 @@ function startUserMedia() {
 
     mediaRecorder.ondataavailable = function(event) {
       // console.log("ondataavailable", event, connection);
+      if(!isSpeaking && new Date().getTime() - lastSpeakingTime > 5 * 1000) {
+        console.log("not speaking");
+        return;
+      }
       if (
         event.data.size > 0 &&
         connection != null &&
@@ -104,6 +101,11 @@ function startUserMedia() {
           connection != null ? connection.getReadyState() : "null",
         );
       }
+    };
+
+    mediaRecorder.onstart = function() {
+      console.log("mediaRecorder onstart");
+      detectSound();
     };
 
     mediaRecorder.onstop = function() {
@@ -139,7 +141,7 @@ function startUserMedia() {
     };
 
 
-    mediaRecorder.start(250);
+    mediaRecorder.start(200);
 
     isMicOn = true;
     chrome.runtime.sendMessage({
@@ -156,6 +158,128 @@ function startUserMedia() {
   });
 }
 
+function start() {
+  if (chosenDevice) {
+    // startSpeechRecognition();
+    startDeepgram();
+    return;
+  }
+  navigator.mediaDevices.enumerateDevices().then(function (devices) {
+    console.log("devices", devices.map((d) => d.label));
+    console.log("devices", devices);
+    chosenDevice = devices[0];
+    allDevices = devices;
+    // startSpeechRecognition();
+    startDeepgram();
+  });
+}
+
+function startSpeechRecognition() {
+  recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = "en-US";
+  recognition.onstart = function() {
+    console.log("speechRecognition onstart");
+    isMicOn = true;
+    chrome.runtime.sendMessage({
+      type: "mic-turned-on",
+    });
+  };
+  recognition.ondataavailable = function(event) {
+    console.log("speechRecognition ondataavailable", event);
+  };
+  recognition.onresult = function(event) {
+    console.log("speechRecognition onresult", event);
+    chrome.runtime.sendMessage({
+      type: "speech-final",
+      message: event.results[event.results.length - 1][0].transcript,
+    });
+  };
+  recognition.onend = function() {
+    console.log("speechRecognition onend");
+    isMicOn = false;
+    chrome.runtime.sendMessage({
+      type: "mic-turned-off",
+    });
+  };
+  recognition.onerror = function(event) {
+    console.log("speechRecognition onerror", event);
+    isMicOn = false;
+    chrome.runtime.sendMessage({
+      type: "mic-turned-off",
+    });
+
+    if(!triedPermission) {
+      chrome.runtime.sendMessage({
+        type: "mic-permission-denied",
+      });
+      triedPermission = true;
+    }
+  };
+  recognition.start();
+  console.log("speechRecognition trying to start");
+}
+
+let isSpeaking = false;
+let lastSpeakingTime = -1;
+var detectSoundId = 0;
+
+function detectSound () {
+
+  // if(detectSoundInterval != null) {
+  //   clearInterval(detectSoundInterval);
+  // }
+
+  const audioContext      = new AudioContext();
+  const audioStreamSource = audioContext.createMediaStreamSource(mediaRecorder.stream);
+  const analyser          = audioContext.createAnalyser();
+  analyser.minDecibels    = -35;
+  audioStreamSource.connect(analyser);
+  const bufferLength      = analyser.frequencyBinCount;
+  const domainData        = new Uint8Array(bufferLength);
+  const myId = detectSoundId++;
+  
+  function detectSoundData () {
+    if(myId != detectSoundId) {
+      return;
+    }
+    if(!isMicOn) {
+      return;
+    }
+    analyser.getByteFrequencyData(domainData);
+    const originalIsSpeaking = isSpeaking;
+    isSpeaking = false;
+
+    console.log("detectSoundData", domainData);
+    
+    for(let i = 0; i < bufferLength; i++){
+        if(domainData[i] > 0){
+            isSpeaking = true;
+            lastSpeakingTime = new Date().getTime();
+        }
+    }
+    
+    if(originalIsSpeaking !== isSpeaking) {
+      console.log("[analyser] speaking changed", isSpeaking);
+    }
+
+    window.requestAnimationFrame(detectSoundData);
+  };
+
+  window.requestAnimationFrame(detectSoundData);
+}
+
+
+setInterval(() => {
+  if(connection && connection.getReadyState() === WebSocket.OPEN) {
+    console.log("sending keepalive");
+    connection.send(JSON.stringify({
+      type: "KeepAlive",
+    }));
+  }
+}, 3000); // Sending KeepAlive messages every 3 seconds
+
 function startDeepgram() {
   const client = createClient("162c389cf3aac80cc803d8533c2df3e683d73c59");
 
@@ -163,19 +287,23 @@ function startDeepgram() {
 
   connection = client.listen.live({
     model: "nova-2",
-    // language: `en-US`,
+    language: `en-US`,
     // Apply smart formatting to the output
-    // smart_format: true,
+    smart_format: true,
+    // encoding: "linear16",
+    // channels: 1,
+    // sample_rate: 16000,
     // To get UtteranceEnd, the following must be set:
-    // interim_results: true,
-    // utterance_end_ms: 1000,
-    // vad_events: true,
+    interim_results: true,
+    utterance_end_ms: 1000,
+    vad_events: true,
     // Time in milliseconds of silence to wait for before finalizing speech
-    // endpointing: 300,
+    endpointing: 100,
     // keywords: ["open", "tab"],
   });
 
   connection.on("open", function () {
+
     console.log("Connection opened.");
 
     connection.on("close", () => {
@@ -224,10 +352,10 @@ function startDeepgram() {
           is_finals = [];
         } else {
           // These are useful if you need real time captioning and update what the Interim Results produced
-          console.log(`Is interim onresults: ${sentence}`);
+          console.log(`Is interim onresults: ${sentence} ${data.is_final}`);
           chrome.runtime.sendMessage({
             type: "interim-results",
-            message: sentence,
+            message: is_finals.join(" "),
           });
         }
       } else {
@@ -247,7 +375,7 @@ function startDeepgram() {
     });
 
     connection.on("error", (err) => {
-      console.error(err);
+      console.error("Deepgram error", err);
     });
 
     startUserMedia();
