@@ -30,6 +30,8 @@ function App() {
         setIsMicOn(false);
       } else if (request.type === "speech-final") {
         setSpeeches((speeches: any) => [...speeches, request.message]);
+      } else if (request.type === "speech-finals") {
+        setSpeeches(() => request.messages);
       }
     });
 
@@ -39,6 +41,10 @@ function App() {
 
     chrome.runtime.sendMessage({
       type: "request-mic-status",
+    });
+
+    chrome.runtime.sendMessage({
+      type: "request-speech-finals",
     });
   }, []);
 

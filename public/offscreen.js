@@ -6,13 +6,23 @@ let {createClient} = deepgram;
 let chosenDevice;
 let allDevices;
 let isMicOn = false;
+let speeches = [];
+
 function stopAll() {
   try {
     mediaRecorder.stop();
     mediaRecorder.stream.getTracks().forEach((track) => {
       track.stop();
     });
-    connection.close();
+    isMicOn = false;
+    chrome.runtime.sendMessage({
+      type: "mic-turned-off",
+    });
+    console.log("stopping websocket", connection);
+    if(connection) {
+      connection.conn.close();
+    }
+    connection = null;
   } catch (e) {
     console.error("Error stopping mic", e);
   }
@@ -39,8 +49,10 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
     startMic();
   } else if (message.type === "set-device") {
     chosenDevice = message.device;
-    stopAll();
-    startDeepgram();
+    if(isMicOn) {
+      stopAll();
+      startDeepgram();
+    }
   } else if (message.type === "request-devices") {
     chrome.runtime.sendMessage({
       type: "devices",
@@ -52,9 +64,14 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   } else if (message.type === "start-mic") {
     startDeepgram();
   } else if (message.type === "request-mic-status") {
+    console.log("sending mic status", isMicOn);
     chrome.runtime.sendMessage({
-      type: "mic-status",
-      isMicOn,
+      type: isMicOn ? "mic-turned-on" : "mic-turned-off",
+    });
+  } else if (message.type === "request-speech-finals") {
+    chrome.runtime.sendMessage({
+      type: "speech-finals",
+      messages: speeches,
     });
   }
 });
@@ -122,7 +139,7 @@ function startUserMedia() {
     };
 
 
-    mediaRecorder.start(50);
+    mediaRecorder.start(250);
 
     isMicOn = true;
     chrome.runtime.sendMessage({
@@ -146,15 +163,16 @@ function startDeepgram() {
 
   connection = client.listen.live({
     model: "nova-2",
-    language: `en-US`,
+    // language: `en-US`,
     // Apply smart formatting to the output
-    smart_format: true,
+    // smart_format: true,
     // To get UtteranceEnd, the following must be set:
-    interim_results: true,
-    utterance_end_ms: 1000,
-    vad_events: true,
+    // interim_results: true,
+    // utterance_end_ms: 1000,
+    // vad_events: true,
     // Time in milliseconds of silence to wait for before finalizing speech
-    endpointing: 300,
+    // endpointing: 300,
+    // keywords: ["open", "tab"],
   });
 
   connection.on("open", function () {
@@ -164,6 +182,7 @@ function startDeepgram() {
       console.log("Connection closed.");
       const finals = is_finals.join(" ");
       console.log(`Speech finals onclose: ${finals}`);
+      speeches.push(finals);
       chrome.runtime.sendMessage({
         type: "speech-final",
         message: finals,
@@ -197,6 +216,7 @@ function startDeepgram() {
         if (data.speech_final) {
           const finals = is_finals.join(" ");
           console.log(`Speech Final onresults: ${finals}`);
+          speeches.push(finals);
           chrome.runtime.sendMessage({
             type: "speech-final",
             message: finals,
