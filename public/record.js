@@ -13,6 +13,7 @@ let currentInterim = "";
 
 start();
 
+
 navigator.permissions.query(
   { name: 'microphone' }
 ).then(function(permissionStatus){
