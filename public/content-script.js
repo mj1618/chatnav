@@ -1,0 +1,46 @@
+
+(function (){
+  if(window.contentScriptIsLoaded){
+    return;
+  }
+  window.contentScriptIsLoaded = true;
+
+  let interval = null;
+  let container = null;
+
+  function removeMessage(){
+    if(interval){
+      clearTimeout(interval);
+      interval = null;
+    }
+    if(container){
+      document.body.removeChild(container);
+      container = null;
+    }
+  }
+
+  function showMessage(message){
+    removeMessage();
+
+    container = document.createElement('div');
+
+    document.body.appendChild(container);
+    const shadow = container.attachShadow({ mode: "open" });
+    
+    var elem = document.createElement('div');
+    elem.style.cssText = 'position:fixed;opacity:0.8;z-index:99999;background:#000;top:20px;left:50%;transform:translateX(-50%);color:white;font-size:20px;text-align:center;padding:5px;';
+    elem.textContent = message;
+    shadow.appendChild(elem);
+
+    interval = setTimeout(() => {
+      removeMessage();
+    }, 5000);
+  }
+
+  chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+    if(message.type==="show-message"){
+      showMessage(message.message);
+    }
+  });
+  
+})();

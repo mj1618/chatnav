@@ -15,6 +15,7 @@
     "notifications",
     "tts",
     "ttsEngine",
+    "scripting",
     "storage"
   ],
   "background": {
@@ -34,6 +35,17 @@
       "matches": [
         "https://*/*",
         "http://*/*"
+      ]
+    }
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*/*",
+        "http://*/*"
+      ],
+      "js": [
+        "content-script.js"
       ]
     }
   ]

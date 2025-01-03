@@ -19,6 +19,18 @@ function createRecordTab() {
   );
 }
 
+function sendTabMessage(tabId, message) {
+  chrome.scripting.executeScript({
+    target: { tabId: tabId },
+    files: ["content-script.js"],
+  }).then(() => {
+    chrome.tabs.sendMessage(tabId, {
+      type: "show-message",
+      message: message.message,
+    });
+  });
+}
+
 chrome.runtime.onMessage.addListener(
   function(message, sender, sendResponse) {
     console.log("background receivedmessage", JSON.stringify(message, null, 2));
@@ -36,8 +48,20 @@ chrome.runtime.onMessage.addListener(
       });
     } else if(message.type === "interim-results") {
       console.log("interim-results", message);
+      chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+        sendTabMessage(tabs[0].id, {
+          type: "show-message",
+          message: message.message,
+        });
+      });
     } else if (message.type === "speech-final") {
       console.log("speech-final", message);
+      chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+        sendTabMessage(tabs[0].id, {
+          type: "show-message",
+          message: message.message,
+        });
+      });
       if(message.message.includes("stop")) {
         chrome.runtime.sendMessage({
           type: "stop-mic",

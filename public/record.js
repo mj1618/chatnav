@@ -128,17 +128,15 @@ function startSpeechRecognition() {
   recognition.onend = function() {
     console.log("speechRecognition onend");
     isMicOn = false;
-    chrome.runtime.sendMessage({
-      type: "mic-turned-off",
-    });
+    recognition.start();
+    // chrome.runtime.sendMessage({
+    //   type: "mic-turned-off",
+    // });
   };
 
   recognition.onerror = function(event) {
     console.log("speechRecognition onerror", event);
     isMicOn = false;
-    chrome.runtime.sendMessage({
-      type: "mic-turned-off",
-    });
     if(event.error === "not-allowed" || event.error === "service-not-allowed") {
       
       if(!triedPermission) {
@@ -147,6 +145,12 @@ function startSpeechRecognition() {
         });
         triedPermission = true;
       }
+
+      chrome.runtime.sendMessage({
+        type: "mic-turned-off",
+      });
+    } else {
+      recognition.start();
     }
 
   };

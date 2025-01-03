@@ -106,6 +106,18 @@ function App() {
 
         <button
           className="bg-blue-500 text-white p-2 rounded-md w-full"
+          onClick={() => {
+            chrome.runtime.sendMessage({
+              type: "interim-results",
+              message: "Hello, world!",
+            });
+          }}
+        >
+          Send message
+        </button>
+
+        <button
+          className="bg-blue-500 text-white p-2 rounded-md w-full"
           onClick={handleMicToggle}
         >
           {isMicOn ? "Turn off mic" : "Turn on mic"}
