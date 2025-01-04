@@ -27,17 +27,21 @@ function createRecordTab() {
 }
 
 function sendTabMessage(tabId, message) {
-  chrome.scripting
-    .executeScript({
-      target: { tabId: tabId },
-      files: ["content-script.js"],
-    })
-    .then(() => {
-      chrome.tabs.sendMessage(tabId, {
-        type: "show-message",
-        message: message.message,
+  try {
+    chrome.scripting
+      .executeScript({
+        target: { tabId: tabId },
+        files: ["content-script.js"],
+      })
+      .then(() => {
+        chrome.tabs.sendMessage(tabId, {
+          type: "show-message",
+          message: message.message,
+        });
       });
-    });
+  } catch (e) {
+    console.error("Error sending message to tab", e);
+  }
 }
 
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
@@ -65,6 +69,9 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         console.log("no active tab to send message to");
         return;
       }
+      if (message.message.trim().length === 0) {
+        return;
+      }
       sendTabMessage(tabs[0].id, {
         type: "show-message",
         message: message.message,
@@ -75,6 +82,9 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs.length === 0) {
         console.log("no active tab to send message to");
+        return;
+      }
+      if (message.message.trim().length === 0) {
         return;
       }
       sendTabMessage(tabs[0].id, {
@@ -101,6 +111,21 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       chrome.tabs.create({
         url: `https://www.google.com/search?q=${searchTerm}`,
       });
+    } else if (
+      message.message.toLowerCase().includes("stop") &&
+      (message.message.toLowerCase().includes("mic") ||
+        message.message.toLowerCase().includes("microphone") ||
+        message.message.toLowerCase().includes("recording"))
+    ) {
+      chrome.runtime.sendMessage({
+        type: "stop-mic",
+      });
+    } else if (message.message.toLowerCase().includes("go back")) {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs.length > 0) {
+          chrome.tabs.goBack(tabs[0].id);
+        }
+      });
     }
   } else if (message.type === "start-mic") {
     if (MicMode === MicModes.deepgram) {
@@ -118,11 +143,45 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         createRecordTab();
       }
     }
+  } else if (message.type === "mic-turned-on") {
+    chrome.action.setIcon({
+      path: "assets/mic-red.png",
+    });
+    // chrome.action.setBadgeText({
+    //   text: "Rec",
+    // });
+  } else if (message.type === "mic-turned-off") {
+    chrome.action.setIcon({
+      path: {
+        16: "assets/mic-black.png",
+        48: "assets/mic-black.png",
+        128: "assets/mic-black.png",
+      },
+    });
+    // chrome.action.setBadgeText({
+    //   text: "",
+    // });
   }
 });
 
 chrome.offscreen.createDocument({
-  url: chrome.runtime.getURL("offscreen-2.html"),
+  url: chrome.runtime.getURL("offscreen-whisper.html"),
   reasons: ["USER_MEDIA"],
   justification: "capturing mic audio",
+});
+
+chrome.action.setBadgeBackgroundColor({
+  color: "red",
+});
+
+// let i = 0;
+// setInterval(() => {
+//   i = (i + 1) % 3;
+//   chrome.action.setBadgeText({
+//     text: ".".repeat(i + 1),
+//   });
+// }, 1000);
+
+chrome.runtime.onStartup.addListener(() => {
+  console.log(`prevent from going inactive`);
 });

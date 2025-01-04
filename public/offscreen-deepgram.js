@@ -7,20 +7,23 @@ let isMicOn = false;
 let speeches = [];
 let recognition;
 let triedPermission = false;
+let mediaStream;
 
 let isSpeaking = true;
 let lastSpeakingTime = -1;
 var detectSoundId = 0;
+let lastSpeechEndTime = -1;
 
 function stop() {
   try {
     if (recognition) {
       recognition.stop();
     }
-    mediaRecorder.stop();
-    mediaRecorder.stream.getTracks().forEach((track) => {
+    console.log("stopping mediaRecorder", mediaRecorder);
+    mediaStream.getTracks().forEach((track) => {
       track.stop();
     });
+    mediaRecorder.destroy();
     isMicOn = false;
     chrome.runtime.sendMessage({
       type: "mic-turned-off",
@@ -84,8 +87,10 @@ function startUserMedia() {
     function (stream) {
       console.log("started webkit audio");
 
+      mediaStream = stream;
       let prebufs = [];
       // mediaRecorder = new MediaRecorder(stream);
+
       function concatArrays(arrays) {
         const sizes = arrays.reduce(
           (out, next) => {
@@ -101,6 +106,7 @@ function startUserMedia() {
         });
         return outArray;
       }
+      let finalizeInterval = null;
       vad.MicVAD.new({
         model: "v5",
         baseAssetPath: "/lib/",
@@ -112,14 +118,26 @@ function startUserMedia() {
         onSpeechStart: function () {
           console.log("speech start");
           speechStarted = true;
+          if (finalizeInterval != null) {
+            clearInterval(finalizeInterval);
+          }
         },
         onSpeechEnd: function (arr) {
+          if (finalizeInterval != null) {
+            clearInterval(finalizeInterval);
+          }
+          finalizeInterval = setInterval(() => {
+            if (connection && connection.getReadyState() === WebSocket.OPEN) {
+              connection.send(JSON.stringify({ type: "Finalize" }));
+            }
+          }, 300);
           // const wavBuffer = vad.utils.encodeWAV(arr);
           // const base64 = vad.utils.arrayBufferToBase64(wavBuffer);
           // const url = `data:audio/wav;base64,${base64}`;
           // console.log("speech end", url);
-          speechStarted = false;
 
+          speechStarted = false;
+          lastSpeechEndTime = new Date().getTime();
           // const wavBuffer = vad.utils.encodeWAV(concatArrays(bufs));
           // const url = `<audio controls autoplay src="data:audio/wav;base64,${vad.utils.arrayBufferToBase64(
           //   wavBuffer
@@ -366,10 +384,6 @@ function startDeepgram() {
         message: finals,
       });
       is_finals = [];
-      mediaRecorder.stop();
-      mediaRecorder.stream.getTracks().forEach((track) => {
-        track.stop();
-      });
     });
 
     connection.on("Metadata", (data) => {
@@ -390,23 +404,36 @@ function startDeepgram() {
 
         // Speech final means we have detected sufficent silence to consider this end of speech
         // Speech final is the lowest latency result as it triggers as soon an the endpointing value has triggered
-        if (data.speech_final) {
-          const finals = is_finals.join(" ");
-          console.log(`Speech Final onresults: ${finals}`);
-          speeches.push(finals);
-          chrome.runtime.sendMessage({
-            type: "speech-final",
-            message: finals,
-          });
-          is_finals = [];
-        } else {
-          // These are useful if you need real time captioning and update what the Interim Results produced
-          console.log(`Is interim onresults: ${sentence} ${data.is_final}`);
-          chrome.runtime.sendMessage({
-            type: "interim-results",
-            message: is_finals.join(" "),
-          });
-        }
+        // if (data.speech_final) {
+        //   const finals = is_finals.join(" ");
+        //   speeches.push(finals);
+        //   is_finals = [];
+        //   console.log(`speech_final onresults: ${finals}`);
+
+        //   chrome.runtime.sendMessage({
+        //     type: "speech-final",
+        //     message: finals,
+        //   });
+        // } else if (data.is_final) {
+        //   const finals = is_finals.join(" ");
+        //   speeches.push(finals);
+        //   is_finals = [];
+
+        //   console.log(`is_final onresults: ${sentence} ${data.is_final}`);
+        //   chrome.runtime.sendMessage({
+        //     type: "speech-final",
+        //     message: finals,
+        //   });
+        // }
+        const finals = is_finals.join(" ");
+        speeches.push(finals);
+        is_finals = [];
+        console.log(`speech_final onresults: ${finals}`);
+
+        chrome.runtime.sendMessage({
+          type: "speech-final",
+          message: finals,
+        });
       } else {
         // These are useful if you need real time captioning of what is being spoken
         console.log(`Interim Results: ${sentence}`);

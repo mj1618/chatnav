@@ -1,10 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Scroll Control",
+  "name": "Chat Nav",
   "version": "1.0.1",
   "description": "Browse the web with your voice",
   "action": {
     "default_popup": "index.html"
+  },
+  "icons": {
+    "16": "assets/mic-black.png",
+    "48": "assets/mic-black.png",
+    "128": "assets/mic-black.png"
   },
   "permissions": [
     "tabs",

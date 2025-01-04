@@ -2,11 +2,47 @@
 
 <head>
   <title>Request Mic</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <script src="lib/tailwindcss.js"></script>
   <script src="request-mic.js"></script>
 </head>
 
-<body>
-  <h1>Requesting access to Mic</h1>
+<body class="w-full h-full flex items-center justify-center">
+  <div class="flex-0 overflow-hidden rounded-lg bg-white shadow max-w-md mx-auto">
+    <div class="px-4 py-5 text-xs sm:px-6">ChatNav</div>
+    <div class="bg-gray-50 px-4 py-5 sm:p-6">
+      <div id="request-mic">
+        <p class="font-normal">
+          ChatNav needs access to your microphone to record your voice.
+          <br />
+          <br />
+          After requesting, click the top button called:<br /><span
+            class="font-bold bg-sky-900 text-gray-100 px-2">Allow
+            while
+            visiting this
+            site</span>
+          <br />
+
+        </p>
+        <!-- <img src="./assets/request-mic.png" class="w-full" /> -->
+
+        <button id="request-mic-button" class="w-full mt-4 bg-blue-500 text-white px-4 py-2 rounded-md">
+          Request Access
+        </button>
+      </div>
+      <div class="hidden" id="request-mic-success">
+        <p>
+          Mic access granted.
+
+        </p>
+        <button id="request-mic-success-button" class="w-full mt-4 bg-blue-500 text-white px-4 py-2 rounded-md">
+          Close tab
+        </button>
+      </div>
+    </div>
+  </div>
 </body>
 
 </html>

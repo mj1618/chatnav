@@ -80,7 +80,7 @@ function App() {
 
   return (
     <div className="w-[300px] h-[500px] p-8">
-      <h1 className="text-2xl font-bold">Scroll Control</h1>
+      <h1 className="text-2xl font-bold">Chat Nav</h1>
       <div>
         {/* <ul>
           {devices.map((device: any) => (
@@ -103,18 +103,6 @@ function App() {
             </select>
           </>
         )}
-
-        <button
-          className="bg-blue-500 text-white p-2 rounded-md w-full"
-          onClick={() => {
-            chrome.runtime.sendMessage({
-              type: "interim-results",
-              message: "Hello, world!",
-            });
-          }}
-        >
-          Send message
-        </button>
 
         <button
           className="bg-blue-500 text-white p-2 rounded-md w-full"
