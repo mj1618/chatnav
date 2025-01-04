@@ -4,9 +4,10 @@ let recordTab;
 const MicModes = {
   deepgram: "deepgram",
   browser: "browser",
+  whisper: "whisper",
 };
 
-const MicMode = MicModes.deepgram;
+const MicMode = MicModes.whisper;
 
 function createRecordTab() {
   chrome.tabs.create(
@@ -27,6 +28,7 @@ function createRecordTab() {
 }
 
 function sendTabMessage(tabId, message) {
+  console.log("sendTabMessage", tabId, message);
   try {
     chrome.scripting
       .executeScript({
@@ -53,7 +55,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       return;
     }
     triedPermission = true;
-    if (MicMode === MicModes.deepgram) {
+    if (MicMode === MicModes.deepgram || MicMode === MicModes.whisper) {
       chrome.tabs.create({
         url: "request-mic.html",
       });
@@ -128,7 +130,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       });
     }
   } else if (message.type === "start-mic") {
-    if (MicMode === MicModes.deepgram) {
+    if (MicMode === MicModes.deepgram || MicMode === MicModes.whisper) {
       // do nothing, offscreen is already running
     } else if (MicMode === MicModes.browser) {
       if (recordTab != null) {

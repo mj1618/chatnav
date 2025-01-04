@@ -20,6 +20,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: "./index.html",
+        whisper: "./offscreen-whisper.html",
+        // js: "./src/offscreen-whisper.js",
       },
     },
   },
