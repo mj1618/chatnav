@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
   document
     .getElementById("request-mic-button")
-    .addEventListener("click", () => {
+    ?.addEventListener("click", () => {
       requestMic();
     });
 });
@@ -12,20 +12,16 @@ function requestMic() {
       audio: true,
     },
     function (stream) {
-      // stream.stop();
-      //   console.log("stream", stream);
-      // recognition.continuous = true;
-      // autoRestart = true;
-      // recognition.start();
-      // window.close();
-      document.getElementById("request-mic-success").classList.remove("hidden");
-      document.getElementById("request-mic").classList.add("hidden");
+      document
+        .getElementById("request-mic-success")
+        ?.classList.remove("hidden");
+      document.getElementById("request-mic")?.classList.add("hidden");
       chrome.runtime.sendMessage({
         type: "mic-permission-granted",
       });
       document
         .getElementById("request-mic-success-button")
-        .addEventListener("click", () => {
+        ?.addEventListener("click", () => {
           window.close();
         });
     },

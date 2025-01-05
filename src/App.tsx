@@ -2,14 +2,10 @@ import { useState } from "react";
 
 import { useEffect } from "react";
 
-declare global {
-  var chrome: any;
-}
-
 function App() {
   const [devices, setDevices] = useState<any>([]);
   const [chosenDevice, setChosenDevice] = useState<any>(null);
-  const [isMicOn, setIsMicOn] = useState<boolean>(false);
+  const [micStatus, setMicStatus] = useState<"on" | "off" | "loading">("off");
   const [speeches, setSpeeches] = useState<any>([]);
   const [interimResult, setInterimResult] = useState<any>("");
 
@@ -28,9 +24,11 @@ function App() {
           setChosenDevice(request.chosenDevice);
         }
       } else if (request.type === "mic-turned-on") {
-        setIsMicOn(true);
+        setMicStatus("on");
       } else if (request.type === "mic-turned-off") {
-        setIsMicOn(false);
+        setMicStatus("off");
+      } else if (request.type === "mic-loading") {
+        setMicStatus("loading");
       } else if (request.type === "speech-final") {
         setSpeeches((speeches: any) => [...speeches, request.message]);
         setInterimResult("");
@@ -66,16 +64,16 @@ function App() {
     });
   };
 
-  const handleMicToggle = () => {
-    if (isMicOn) {
-      chrome.runtime.sendMessage({
-        type: "stop-mic",
-      });
-    } else {
-      chrome.runtime.sendMessage({
-        type: "start-mic",
-      });
-    }
+  const turnMicOn = () => {
+    chrome.runtime.sendMessage({
+      type: "start-mic",
+    });
+  };
+
+  const turnMicOff = () => {
+    chrome.runtime.sendMessage({
+      type: "stop-mic",
+    });
   };
 
   return (
@@ -104,12 +102,23 @@ function App() {
           </>
         )}
 
-        <button
-          className="bg-blue-500 text-white p-2 rounded-md w-full"
-          onClick={handleMicToggle}
-        >
-          {isMicOn ? "Turn off mic" : "Turn on mic"}
-        </button>
+        {micStatus === "loading" && <p>Mic is loading...</p>}
+        {micStatus === "off" && (
+          <button
+            className="bg-blue-500 text-white p-2 rounded-md w-full"
+            onClick={turnMicOn}
+          >
+            Turn on mic
+          </button>
+        )}
+        {micStatus === "on" && (
+          <button
+            className="bg-blue-500 text-white p-2 rounded-md w-full"
+            onClick={turnMicOff}
+          >
+            Turn off mic
+          </button>
+        )}
 
         {speeches.map((speech: any) => (
           <p key={speech}>{speech}</p>

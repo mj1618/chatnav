@@ -21,7 +21,13 @@ export default defineConfig({
       input: {
         main: "./index.html",
         whisper: "./offscreen-whisper.html",
-        // js: "./src/offscreen-whisper.js",
+        deepgram: "./offscreen-deepgram.html",
+        requestMic: "./request-mic.html",
+        "content-script": "./src/content-script.ts",
+        background: "./src/background.ts",
+      },
+      output: {
+        entryFileNames: "[name].js",
       },
     },
   },

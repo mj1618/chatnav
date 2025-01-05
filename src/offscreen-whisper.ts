@@ -9,16 +9,17 @@ declare global {
 let mediaRecorder: any;
 let chosenDevice: MediaDeviceInfo;
 let allDevices: MediaDeviceInfo[];
-let isMicOn = false;
+let micStatus: "on" | "off" | "loading" = "off";
 let speeches: string[] = [];
 let audioContext: AudioContext;
 let lastComputedTranscript = "";
 let worker: Worker;
+let speechStarted = false;
 
 function stopAll() {
   try {
     mediaRecorder.pause();
-    isMicOn = false;
+    micStatus = "off";
     chrome.runtime.sendMessage({
       type: "mic-turned-off",
     });
@@ -40,7 +41,7 @@ chrome.runtime.onMessage.addListener(function (
     startUserMedia();
   } else if (message.type === "set-device") {
     chosenDevice = message.device;
-    if (isMicOn) {
+    if (micStatus === "on") {
       stopAll();
       startUserMedia();
     }
@@ -55,9 +56,14 @@ chrome.runtime.onMessage.addListener(function (
   } else if (message.type === "start-mic") {
     startUserMedia();
   } else if (message.type === "request-mic-status") {
-    console.log("sending mic status", isMicOn);
+    console.log("sending mic status", micStatus);
     chrome.runtime.sendMessage({
-      type: isMicOn ? "mic-turned-on" : "mic-turned-off",
+      type:
+        micStatus === "on"
+          ? "mic-turned-on"
+          : micStatus === "off"
+          ? "mic-turned-off"
+          : "mic-loading",
     });
   } else if (message.type === "request-speech-finals") {
     chrome.runtime.sendMessage({
@@ -69,6 +75,10 @@ chrome.runtime.onMessage.addListener(function (
 });
 
 function startUserMedia() {
+  micStatus = "loading";
+  chrome.runtime.sendMessage({
+    type: "mic-loading",
+  });
   console.log("startUserMedia", chosenDevice);
   navigator.webkitGetUserMedia(
     {
@@ -85,10 +95,31 @@ function startUserMedia() {
 
       // console.log(stream.)
       console.log("mediaRecorder", mediaRecorder, stream, stream.getTracks());
-      let speechStarted = false;
+
       let lastSpeechEndTime = -1;
+      let lastSpeechTime = -1;
       let bufs: Float32Array[] = [];
       let prebufs: Float32Array[] = [];
+
+      const onSpeechStart = () => {
+        console.log("speech start");
+        speechStarted = true;
+        bufs = [...prebufs];
+        prebufs = [];
+      };
+
+      const onSpeechEnd = () => {
+        console.log("speech end");
+
+        chrome.runtime.sendMessage({
+          type: "speech-final",
+          message: lastComputedTranscript,
+        });
+        bufs = [];
+
+        speechStarted = false;
+        lastSpeechEndTime = new Date().getTime();
+      };
 
       vad.MicVAD.new({
         // model: "v5",
@@ -99,37 +130,23 @@ function startUserMedia() {
           // @ts-ignore
           latency: 0.002,
         },
-        onSpeechStart: function () {
-          console.log("speech start");
-          speechStarted = true;
-          bufs = [...prebufs];
-          prebufs = [];
-        },
-        onSpeechEnd: function () {
-          console.log("speech end");
-          chrome.runtime.sendMessage({
-            type: "speech-final",
-            message: lastComputedTranscript,
-          });
-          // const wavBuffer = vad.utils.encodeWAV(arr);
-          // const base64 = vad.utils.arrayBufferToBase64(wavBuffer);
-          // const url = `data:audio/wav;base64,${base64}`;
-          // console.log("speech end", url);
-
-          // bufs = [];
-
-          speechStarted = false;
-          lastSpeechEndTime = new Date().getTime();
-          // const wavBuffer = vad.utils.encodeWAV(concatArrays(bufs));
-          // const url = `<audio controls autoplay src="data:audio/wav;base64,${vad.utils.arrayBufferToBase64(
-          //   wavBuffer
-          // )}"></audio>`;
-          // console.log("speech end", url);
-        },
+        // onSpeechStart: onSpeechStart,
+        // onSpeechEnd: onSpeechEnd,
         // @ts-ignore
-        onFrameProcessed: function (probs, data: Float32Array) {
+        onFrameProcessed: function (
+          probs: { isSpeech: number },
+          data: Float32Array
+        ) {
+          if (probs.isSpeech > 0.5 && !speechStarted) {
+            onSpeechStart();
+          }
+
           if (speechStarted) {
             bufs.push(data);
+            worker.postMessage({
+              type: "generate",
+              data: { audio: concatArrays(bufs), language: "en" },
+            });
           } else {
             prebufs.push(data);
             if (prebufs.length > 30) {
@@ -137,11 +154,16 @@ function startUserMedia() {
             }
           }
 
-          if (speechStarted || new Date().getTime() - lastSpeechEndTime < 300) {
-            worker.postMessage({
-              type: "generate",
-              data: { audio: concatArrays(bufs), language: "en" },
-            });
+          if (probs.isSpeech > 0.5) {
+            lastSpeechTime = new Date().getTime();
+          }
+
+          if (
+            probs.isSpeech < 0.5 &&
+            speechStarted &&
+            new Date().getTime() - lastSpeechTime > 1000
+          ) {
+            onSpeechEnd();
           }
         },
       }).then((v: any) => {
@@ -151,13 +173,13 @@ function startUserMedia() {
 
         mediaRecorder.start();
 
-        isMicOn = true;
+        micStatus = "on";
         chrome.runtime.sendMessage({
           type: "mic-turned-on",
         });
       });
 
-      isMicOn = true;
+      micStatus = "on";
       chrome.runtime.sendMessage({
         type: "mic-turned-on",
       });
@@ -176,7 +198,7 @@ function startUserMedia() {
 function startWorker() {
   if (!worker) {
     worker = new Worker(
-      new URL("./offscreen-whisper-worker.js", import.meta.url),
+      new URL("./offscreen-whisper-worker-en.js", import.meta.url),
       {
         type: "module",
       }
@@ -251,11 +273,13 @@ function startWorker() {
           // setText(e.data.output);
           const transcript = e.data.output[0].replace(/[\[\]]/g, "");
           console.log("complete", e);
-          chrome.runtime.sendMessage({
-            type: "interim-results",
-            message: transcript,
-          });
-          lastComputedTranscript = transcript;
+          if (speechStarted) {
+            chrome.runtime.sendMessage({
+              type: "interim-results",
+              message: transcript,
+            });
+            lastComputedTranscript = transcript;
+          }
           break;
       }
     };

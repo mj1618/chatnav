@@ -1,4 +1,4 @@
-import { ChatNavMessage } from "./types";
+import { ChatNavMessage } from "../../src/types";
 
 let mediaRecorder: MediaRecorder;
 let chosenDevice: MediaDeviceInfo;

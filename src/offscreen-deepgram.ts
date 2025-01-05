@@ -1,13 +1,27 @@
-let mediaRecorder;
-let connection;
-let { createClient } = deepgram;
-let chosenDevice;
-let allDevices;
-let isMicOn = false;
-let speeches = [];
-let recognition;
+import { MicVAD } from "@ricky0123/vad";
+import { ChatNavMessage } from "./types";
+import { concatArrays } from "./utils";
+
+declare global {
+  interface Window {
+    deepgram: any;
+  }
+}
+
+let mediaRecorder: MicVAD;
+let connection: {
+  conn: WebSocket;
+  getReadyState: () => number;
+  send: (data: any) => void;
+  on: (event: string, callback: (data: any) => void) => void;
+} | null = null;
+let { createClient } = window.deepgram;
+let chosenDevice: MediaDeviceInfo;
+let allDevices: MediaDeviceInfo[];
+let micStatus: "on" | "off" | "loading" = "off";
+let speeches: string[] = [];
 let triedPermission = false;
-let mediaStream;
+let mediaStream: MediaStream;
 
 let isSpeaking = true;
 let lastSpeakingTime = -1;
@@ -16,15 +30,13 @@ let lastSpeechEndTime = -1;
 
 function stop() {
   try {
-    if (recognition) {
-      recognition.stop();
-    }
     console.log("stopping mediaRecorder", mediaRecorder);
     mediaStream.getTracks().forEach((track) => {
       track.stop();
     });
+    // @ts-ignore
     mediaRecorder.destroy();
-    isMicOn = false;
+    micStatus = "off";
     chrome.runtime.sendMessage({
       type: "mic-turned-off",
     });
@@ -40,12 +52,16 @@ function stop() {
 
 start();
 
-chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+chrome.runtime.onMessage.addListener(function (
+  message: ChatNavMessage,
+  sender: any,
+  sendResponse: any
+) {
   if (message.type === "mic-permission-granted") {
     start();
   } else if (message.type === "set-device") {
     chosenDevice = message.device;
-    if (isMicOn) {
+    if (micStatus === "on") {
       stop();
       start();
     }
@@ -60,9 +76,14 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   } else if (message.type === "start-mic") {
     start();
   } else if (message.type === "request-mic-status") {
-    console.log("sending mic status", isMicOn);
+    console.log("sending mic status", micStatus);
     chrome.runtime.sendMessage({
-      type: isMicOn ? "mic-turned-on" : "mic-turned-off",
+      type:
+        micStatus === "on"
+          ? "mic-turned-on"
+          : micStatus === "off"
+          ? "mic-turned-off"
+          : "mic-loading",
     });
   } else if (message.type === "request-speech-finals") {
     chrome.runtime.sendMessage({
@@ -88,25 +109,10 @@ function startUserMedia() {
       console.log("started webkit audio");
 
       mediaStream = stream;
-      let prebufs = [];
+      let prebufs: Float32Array[] = [];
       // mediaRecorder = new MediaRecorder(stream);
 
-      function concatArrays(arrays) {
-        const sizes = arrays.reduce(
-          (out, next) => {
-            out.push(out.at(-1) + next.length);
-            return out;
-          },
-          [0]
-        );
-        const outArray = new Float32Array(sizes.at(-1));
-        arrays.forEach((arr, index) => {
-          const place = sizes[index];
-          outArray.set(arr, place);
-        });
-        return outArray;
-      }
-      let finalizeInterval = null;
+      let finalizeInterval: NodeJS.Timeout | null = null;
       vad.MicVAD.new({
         model: "v5",
         baseAssetPath: "/lib/",
@@ -122,7 +128,7 @@ function startUserMedia() {
             clearInterval(finalizeInterval);
           }
         },
-        onSpeechEnd: function (arr) {
+        onSpeechEnd: function (arr: Float32Array) {
           if (finalizeInterval != null) {
             clearInterval(finalizeInterval);
           }
@@ -144,7 +150,7 @@ function startUserMedia() {
           // )}"></audio>`;
           // console.log("speech end", url);
         },
-        onFrameProcessed: function (probs, data) {
+        onFrameProcessed: function (probs: number[], data: Float32Array) {
           if (
             speechStarted &&
             data.length > 0 &&
@@ -173,7 +179,7 @@ function startUserMedia() {
             }
           }
         },
-      }).then((vad) => {
+      }).then((vad: MicVAD) => {
         mediaRecorder = vad;
         // console.log(stream.)
         console.log("mediaRecorder", mediaRecorder, stream, stream.getTracks());
@@ -217,7 +223,7 @@ function startUserMedia() {
 
         mediaRecorder.start();
 
-        isMicOn = true;
+        micStatus = "on";
         chrome.runtime.sendMessage({
           type: "mic-turned-on",
         });
@@ -235,6 +241,10 @@ function startUserMedia() {
 }
 
 function start() {
+  micStatus = "loading";
+  chrome.runtime.sendMessage({
+    type: "mic-loading",
+  });
   if (chosenDevice) {
     // startSpeechRecognition();
     startDeepgram();
@@ -253,91 +263,6 @@ function start() {
   });
 }
 
-function startSpeechRecognition() {
-  recognition = new (window.SpeechRecognition ||
-    window.webkitSpeechRecognition)();
-  recognition.continuous = true;
-  recognition.interimResults = true;
-  recognition.lang = "en-US";
-  recognition.onstart = function () {
-    console.log("speechRecognition onstart");
-    isMicOn = true;
-    chrome.runtime.sendMessage({
-      type: "mic-turned-on",
-    });
-  };
-  recognition.ondataavailable = function (event) {
-    console.log("speechRecognition ondataavailable", event);
-  };
-  recognition.onresult = function (event) {
-    console.log("speechRecognition onresult", event);
-    chrome.runtime.sendMessage({
-      type: "speech-final",
-      message: event.results[event.results.length - 1][0].transcript,
-    });
-  };
-  recognition.onend = function () {
-    console.log("speechRecognition onend");
-    isMicOn = false;
-    chrome.runtime.sendMessage({
-      type: "mic-turned-off",
-    });
-  };
-  recognition.onerror = function (event) {
-    console.log("speechRecognition onerror", event);
-    isMicOn = false;
-    chrome.runtime.sendMessage({
-      type: "mic-turned-off",
-    });
-
-    if (!triedPermission) {
-      chrome.runtime.sendMessage({
-        type: "mic-permission-denied",
-      });
-      triedPermission = true;
-    }
-  };
-  recognition.start();
-  console.log("speechRecognition trying to start");
-}
-
-function detectSound() {
-  // if(detectSoundInterval != null) {
-  //   clearInterval(detectSoundInterval);
-  // }
-  // const audioContext      = new AudioContext();
-  // const audioStreamSource = audioContext.createMediaStreamSource(mediaRecorder.stream);
-  // const analyser          = audioContext.createAnalyser();
-  // analyser.minDecibels    = -35;
-  // audioStreamSource.connect(analyser);
-  // const bufferLength      = analyser.frequencyBinCount;
-  // const domainData        = new Uint8Array(bufferLength);
-  // const myId = detectSoundId++;
-  // function detectSoundData () {
-  //   if(myId != detectSoundId) {
-  //     return;
-  //   }
-  //   if(!isMicOn) {
-  //     return;
-  //   }
-  //   analyser.getByteFrequencyData(domainData);
-  //   const originalIsSpeaking = isSpeaking;
-  //   isSpeaking = false;
-  //   console.log("detectSoundData", domainData);
-  //   for(let i = 0; i < bufferLength; i++){
-  //       if(domainData[i] > 0){
-  //           isSpeaking = true;
-  //           lastSpeakingTime = new Date().getTime();
-  //       }
-  //   }
-  //   if(originalIsSpeaking !== isSpeaking) {
-  //     console.log("[analyser] speaking changed", isSpeaking);
-  //   }
-  //   window.requestAnimationFrame(detectSoundData);
-  // };
-  // window.requestAnimationFrame(detectSoundData);
-}
-
 setInterval(() => {
   if (connection && connection.getReadyState() === WebSocket.OPEN) {
     console.log("sending keepalive");
@@ -352,7 +277,7 @@ setInterval(() => {
 function startDeepgram() {
   const client = createClient("162c389cf3aac80cc803d8533c2df3e683d73c59");
 
-  let is_finals = [];
+  let is_finals: string[] = [];
 
   connection = client.listen.live({
     model: "nova-2",
@@ -371,8 +296,18 @@ function startDeepgram() {
     // keywords: ["open", "tab"],
   });
 
+  if (!connection) {
+    console.error("Connection is null");
+    return;
+  }
+
   connection.on("open", function () {
     console.log("Connection opened.");
+
+    if (!connection) {
+      console.error("Connection is null");
+      return;
+    }
 
     connection.on("close", () => {
       console.log("Connection closed.");

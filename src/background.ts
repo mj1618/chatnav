@@ -1,5 +1,5 @@
 let triedPermission = false;
-let recordTab;
+let recordTab: chrome.tabs.Tab | null = null;
 
 const MicModes = {
   deepgram: "deepgram",
@@ -27,7 +27,7 @@ function createRecordTab() {
   );
 }
 
-function sendTabMessage(tabId, message) {
+function sendTabMessage(tabId: number, message: string) {
   console.log("sendTabMessage", tabId, message);
   try {
     chrome.scripting
@@ -38,7 +38,7 @@ function sendTabMessage(tabId, message) {
       .then(() => {
         chrome.tabs.sendMessage(tabId, {
           type: "show-message",
-          message: message.message,
+          message: message,
         });
       });
   } catch (e) {
@@ -60,7 +60,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
         url: "request-mic.html",
       });
     } else if (MicMode === MicModes.browser) {
-      chrome.tabs.update(recordTab.id, {
+      chrome.tabs.update(recordTab!.id!, {
         active: true,
       });
     }
@@ -74,10 +74,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       if (message.message.trim().length === 0) {
         return;
       }
-      sendTabMessage(tabs[0].id, {
-        type: "show-message",
-        message: message.message,
-      });
+      sendTabMessage(tabs[0].id!, message.message);
     });
   } else if (message.type === "speech-final") {
     console.log("speech-final", message);
@@ -89,10 +86,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       if (message.message.trim().length === 0) {
         return;
       }
-      sendTabMessage(tabs[0].id, {
-        type: "show-message",
-        message: message.message,
-      });
+      sendTabMessage(tabs[0].id!, message.message);
     });
     if (message.message.includes("stop")) {
       chrome.runtime.sendMessage({
@@ -125,7 +119,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     } else if (message.message.toLowerCase().includes("go back")) {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         if (tabs.length > 0) {
-          chrome.tabs.goBack(tabs[0].id);
+          chrome.tabs.goBack(tabs[0].id!);
         }
       });
     }
@@ -134,6 +128,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       // do nothing, offscreen is already running
     } else if (MicMode === MicModes.browser) {
       if (recordTab != null) {
+        // @ts-ignore
         chrome.tabs.query({ id: recordTab.id }, (tabs) => {
           if (tabs.length > 0) {
             console.log("tab already exists");
@@ -168,6 +163,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
 chrome.offscreen.createDocument({
   url: chrome.runtime.getURL("offscreen-whisper.html"),
+  // @ts-ignore
   reasons: ["USER_MEDIA"],
   justification: "capturing mic audio",
 });
