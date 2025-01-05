@@ -16,3 +16,73 @@ export function concatArrays(arrays: Float32Array[]) {
   });
   return outArray;
 }
+
+let recordTab: chrome.tabs.Tab | null = null;
+export async function createRecordTab() {
+  if (recordTab != null) {
+    return;
+  }
+  recordTab = await chrome.tabs.create({
+    url: chrome.runtime.getURL("record.html"),
+    pinned: true,
+    active: false,
+  });
+  chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
+    if (tabId === recordTab!.id && changeInfo.status === "complete") {
+      chrome.tabs.onUpdated.removeListener(listener);
+    }
+  });
+
+  //   (tab) => {
+  //     chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
+  //       if (tabId === tab.id && changeInfo.status === "complete") {
+  //         recordTab = tab;
+  //         chrome.tabs.onUpdated.removeListener(listener);
+  //       }
+  //     });
+  //   }
+  // );
+}
+
+export async function sendTabMessage(
+  tabId: number,
+  type: string,
+  message: string
+) {
+  console.log("sendTabMessage", tabId, type, message);
+  try {
+    // await chrome.scripting.executeScript({
+    //   target: { tabId: tabId },
+    //   files: ["content-script.js"],
+    // });
+  } catch (e) {
+    console.error("Error sending message to tab", e);
+  } finally {
+    chrome.tabs.sendMessage(tabId, {
+      type: type,
+      message: message,
+    });
+  }
+}
+
+export const activeTab = async () => {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tabs.length === 0) {
+    console.log("no active tab");
+    return null;
+  }
+  return tabs[0];
+};
+
+export const getTabById = async (tabId: number | undefined) => {
+  if (tabId == null) {
+    console.log("no tab id");
+    return null;
+  }
+  const tab = await chrome.tabs.get(tabId);
+  if (tab == null) {
+    console.log("no tab found with id", tabId);
+    return null;
+  }
+  return tab;
+};

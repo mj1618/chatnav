@@ -1,3 +1,5 @@
+import { findCommand } from "./commands";
+
 declare global {
   interface Window {
     contentScriptIsLoaded: boolean;
@@ -43,13 +45,19 @@ declare global {
     }, 5000);
   }
 
-  chrome.runtime.onMessage.addListener(function (
+  chrome.runtime.onMessage.addListener(async function (
     message,
     sender,
     sendResponse
   ) {
-    if (message.type === "show-message") {
+    if (message.type === "interim-results") {
       showMessage(message.message);
+    } else if (message.type === "speech-final") {
+      const cmd = await findCommand(message.message, window.location.href);
+      console.log("speech-final", message, cmd);
+      if (cmd != null && cmd.environment === "content-script") {
+        cmd.action();
+      }
     }
   });
 })();

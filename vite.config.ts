@@ -23,7 +23,6 @@ export default defineConfig({
         whisper: "./offscreen-whisper.html",
         deepgram: "./offscreen-deepgram.html",
         requestMic: "./request-mic.html",
-        "content-script": "./src/content-script.ts",
         background: "./src/background.ts",
       },
       output: {
