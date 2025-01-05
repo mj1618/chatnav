@@ -1,19 +1,23 @@
+// import vad, { MicVAD } from "@ricky0123/vad/dist/index.browser";
 import { ChatNavMessage } from "./types";
+import { concatArrays } from "./utils";
 
-let mediaRecorder: MediaRecorder;
+declare global {
+  var vad: any;
+}
+
+let mediaRecorder: any;
 let chosenDevice: MediaDeviceInfo;
 let allDevices: MediaDeviceInfo[];
 let isMicOn = false;
 let speeches: string[] = [];
 let audioContext: AudioContext;
+let lastComputedTranscript = "";
 let worker: Worker;
 
 function stopAll() {
   try {
-    mediaRecorder.stop();
-    mediaRecorder.stream.getTracks().forEach((track) => {
-      track.stop();
-    });
+    mediaRecorder.pause();
     isMicOn = false;
     chrome.runtime.sendMessage({
       type: "mic-turned-off",
@@ -76,91 +80,82 @@ function startUserMedia() {
     },
     function (stream) {
       console.log("started webkit audio");
-      mediaRecorder = new MediaRecorder(stream);
+      // mediaRecorder = new MediaRecorder(stream);
       audioContext = new AudioContext({ sampleRate: 16000 });
 
       // console.log(stream.)
       console.log("mediaRecorder", mediaRecorder, stream, stream.getTracks());
-      let chunks: Blob[] = [];
-      let lastStartTime = new Date().getTime();
-      let isStopped = false;
-      mediaRecorder.ondataavailable = async function (event) {
-        if (isStopped) {
-          return;
-        }
-        if (event.data.size <= 0) {
-          mediaRecorder.requestData();
-          return;
-        }
-        chunks.push(event.data);
+      let speechStarted = false;
+      let lastSpeechEndTime = -1;
+      let bufs: Float32Array[] = [];
+      let prebufs: Float32Array[] = [];
 
-        if (new Date().getTime() - lastStartTime > 5_000) {
-          mediaRecorder.stop();
-          startUserMedia();
-          isStopped = true;
-          lastStartTime = new Date().getTime();
-          chunks = [];
-          return;
-        }
-
-        const fileReader = new FileReader();
-        const blob = new Blob(chunks, { type: mediaRecorder.mimeType });
-
-        fileReader.onload = async () => {
-          // console.log("result", fileReader.result);
-          let decoded = await audioContext.decodeAudioData(
-            fileReader.result as ArrayBuffer
-          );
-          let audio = decoded.getChannelData(0);
-          if (audio.length > 16000 * 30) {
-            // Get last MAX_SAMPLES
-            audio = audio.slice(-16000 * 30);
-          }
-          worker.postMessage({
-            type: "generate",
-            data: { audio, language: "en" },
+      vad.MicVAD.new({
+        // model: "v5",
+        baseAssetPath: "/lib/",
+        onnxWASMBasePath: "/lib/",
+        stream,
+        additionalAudioConstraints: {
+          // @ts-ignore
+          latency: 0.002,
+        },
+        onSpeechStart: function () {
+          console.log("speech start");
+          speechStarted = true;
+          bufs = [...prebufs];
+          prebufs = [];
+        },
+        onSpeechEnd: function () {
+          console.log("speech end");
+          chrome.runtime.sendMessage({
+            type: "speech-final",
+            message: lastComputedTranscript,
           });
-        };
-        fileReader.readAsArrayBuffer(blob);
-      };
+          // const wavBuffer = vad.utils.encodeWAV(arr);
+          // const base64 = vad.utils.arrayBufferToBase64(wavBuffer);
+          // const url = `data:audio/wav;base64,${base64}`;
+          // console.log("speech end", url);
 
-      mediaRecorder.onstart = function () {
-        console.log("mediaRecorder onstart");
-      };
+          // bufs = [];
 
-      mediaRecorder.onstop = function () {
-        console.log("mediaRecorder onstop");
-        // isMicOn = false;
-        // chrome.runtime.sendMessage({
-        //   type: "mic-turned-off",
-        // });
-      };
+          speechStarted = false;
+          lastSpeechEndTime = new Date().getTime();
+          // const wavBuffer = vad.utils.encodeWAV(concatArrays(bufs));
+          // const url = `<audio controls autoplay src="data:audio/wav;base64,${vad.utils.arrayBufferToBase64(
+          //   wavBuffer
+          // )}"></audio>`;
+          // console.log("speech end", url);
+        },
+        // @ts-ignore
+        onFrameProcessed: function (probs, data: Float32Array) {
+          if (speechStarted) {
+            bufs.push(data);
+          } else {
+            prebufs.push(data);
+            if (prebufs.length > 30) {
+              prebufs = prebufs.slice(-30);
+            }
+          }
 
-      mediaRecorder.onerror = function (event) {
-        console.log("mediaRecorder onerror", event);
-        isMicOn = false;
-        chrome.runtime.sendMessage({
-          type: "mic-turned-off",
-        });
-      };
+          if (speechStarted || new Date().getTime() - lastSpeechEndTime < 300) {
+            worker.postMessage({
+              type: "generate",
+              data: { audio: concatArrays(bufs), language: "en" },
+            });
+          }
+        },
+      }).then((v: any) => {
+        mediaRecorder = v;
+        // console.log(stream.)
+        console.log("mediaRecorder", mediaRecorder, stream, stream.getTracks());
 
-      mediaRecorder.onpause = function (event) {
-        console.log("mediaRecorder onpause", event);
-        // isMicOn = false;
-        // chrome.runtime.sendMessage({
-        //   type: "mic-turned-off",
-        // });
-      };
+        mediaRecorder.start();
 
-      mediaRecorder.onresume = function (event) {
-        console.log("mediaRecorder onresume", event);
         isMicOn = true;
         chrome.runtime.sendMessage({
           type: "mic-turned-on",
         });
-      };
-
-      mediaRecorder.start(200);
+      });
 
       isMicOn = true;
       chrome.runtime.sendMessage({
@@ -189,7 +184,7 @@ function startWorker() {
     worker.postMessage({ type: "load" });
 
     const onMessageReceived = (e: any) => {
-      console.log("onMessageReceived", e.data);
+      // console.log("onMessageReceived", e.data);
       switch (e.data.status) {
         case "loading":
           // Model file start load: add a new progress item to the list.
@@ -254,11 +249,13 @@ function startWorker() {
           // Generation complete: re-enable the "Generate" button
           // setIsProcessing(false);
           // setText(e.data.output);
+          const transcript = e.data.output[0].replace(/[\[\]]/g, "");
           console.log("complete", e);
           chrome.runtime.sendMessage({
-            type: "speech-final",
-            message: e.data.output[0].replace(/[\[\]]/g, ""), // remove everything inside square brackes
+            type: "interim-results",
+            message: transcript,
           });
+          lastComputedTranscript = transcript;
           break;
       }
     };

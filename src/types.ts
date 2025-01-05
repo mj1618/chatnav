@@ -4,10 +4,6 @@ export type ChatNavMessage =
       message: string;
     }
   | {
-      type: "interim-result";
-      message: string;
-    }
-  | {
       type: "mic-permission-granted";
     }
   | {
