@@ -51,10 +51,10 @@ export async function sendTabMessage(
 ) {
   console.log("sendTabMessage", tabId, type, message);
   try {
-    // await chrome.scripting.executeScript({
-    //   target: { tabId: tabId },
-    //   files: ["content-script.js"],
-    // });
+    await chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      files: ["content-script.js"],
+    });
   } catch (e) {
     console.error("Error sending message to tab", e);
   } finally {

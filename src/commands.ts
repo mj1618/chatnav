@@ -7,7 +7,7 @@ const generalCommandGroup: CommandGroup = {
     {
       type: "command",
       name: "stop",
-      alternatives: ["stop"],
+      alternatives: ["stop", "off"],
       subCommands: [
         {
           type: "leaf",
@@ -70,7 +70,7 @@ const generalCommandGroup: CommandGroup = {
           environment: "service-worker",
           action: () => {
             chrome.tabs.create({
-              url: "",
+              url: "chrome://newtab",
             });
           },
         },
@@ -172,6 +172,7 @@ function matchesCommand(
   value: Command
 ): { idx: number; leaf: LeafCommand | null } {
   const words = command.toLowerCase().trim().split(" ");
+  console.log("checking", command, value);
   const q = [
     {
       idx: -1,
@@ -182,11 +183,15 @@ function matchesCommand(
   while (q.length > 0) {
     const { idx: firstIdx, currCmd } = q.shift()!;
     const currIdx = words.findIndex((word) =>
-      currCmd.alternatives.some((alt) => alt.includes(word))
+      currCmd.alternatives
+        .concat([currCmd.name])
+        .some((alt) => word.includes(alt))
     );
+    console.log("currIdx", currIdx);
     if (currIdx !== -1) {
       if ("subCommands" in currCmd) {
         for (const [key, subCmd] of Object.entries(currCmd.subCommands)) {
+          console.log("pushing", subCmd);
           q.push({ idx: firstIdx < 0 ? currIdx : firstIdx, currCmd: subCmd });
         }
       } else {
@@ -229,3 +234,5 @@ export async function findCommand(
   }
   return found;
 }
+
+console.log("open tab", findCommand("open tab"));

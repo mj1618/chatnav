@@ -15,10 +15,15 @@ let audioContext: AudioContext;
 let lastComputedTranscript = "";
 let worker: Worker;
 let speechStarted = false;
-
+let modelId = "onnx-community/whisper-base.en";
 function stopAll() {
   try {
-    mediaRecorder.pause();
+    if (mediaRecorder) {
+      mediaRecorder.stream.getTracks().forEach((track: any) => {
+        track.stop();
+      });
+      mediaRecorder.destroy();
+    }
     micStatus = "off";
     chrome.runtime.sendMessage({
       type: "mic-turned-off",
@@ -42,7 +47,6 @@ chrome.runtime.onMessage.addListener(function (
   } else if (message.type === "set-device") {
     chosenDevice = message.device;
     if (micStatus === "on") {
-      stopAll();
       startUserMedia();
     }
   } else if (message.type === "request-devices") {
@@ -75,6 +79,7 @@ chrome.runtime.onMessage.addListener(function (
 });
 
 function startUserMedia() {
+  stopAll();
   micStatus = "loading";
   chrome.runtime.sendMessage({
     type: "mic-loading",
@@ -85,18 +90,16 @@ function startUserMedia() {
       audio: {
         sampleRate: 16000,
         latency: 0.002,
+        deviceId: chosenDevice.deviceId,
       },
-      deviceId: chosenDevice.deviceId,
     },
     function (stream) {
       console.log("started webkit audio");
       // mediaRecorder = new MediaRecorder(stream);
       audioContext = new AudioContext({ sampleRate: 16000 });
 
-      // console.log(stream.)
       console.log("mediaRecorder", mediaRecorder, stream, stream.getTracks());
 
-      let lastSpeechEndTime = -1;
       let lastSpeechTime = -1;
       let bufs: Float32Array[] = [];
       let prebufs: Float32Array[] = [];
@@ -118,7 +121,6 @@ function startUserMedia() {
         bufs = [];
 
         speechStarted = false;
-        lastSpeechEndTime = new Date().getTime();
       };
 
       vad.MicVAD.new({
@@ -178,11 +180,6 @@ function startUserMedia() {
           type: "mic-turned-on",
         });
       });
-
-      micStatus = "on";
-      chrome.runtime.sendMessage({
-        type: "mic-turned-on",
-      });
     },
     function () {
       // Aw. No permission (or no microphone available).
@@ -195,15 +192,32 @@ function startUserMedia() {
   );
 }
 
-function startWorker() {
+async function startWorker() {
+  micStatus = "loading";
+  chrome.runtime.sendMessage({
+    type: "mic-loading",
+  });
+  if (!chosenDevice) {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    console.log(
+      "devices",
+      devices.map((d) => d.label)
+    );
+    console.log("devices", devices);
+    chosenDevice = devices[0];
+    allDevices = devices;
+  }
   if (!worker) {
     worker = new Worker(
-      new URL("./offscreen-whisper-worker-en.js", import.meta.url),
+      new URL("./offscreen-whisper-worker.js", import.meta.url),
       {
         type: "module",
       }
     );
-    worker.postMessage({ type: "load" });
+    worker.postMessage({
+      type: "load",
+      modelId,
+    });
 
     const onMessageReceived = (e: any) => {
       // console.log("onMessageReceived", e.data);
@@ -216,6 +230,10 @@ function startWorker() {
 
         case "initiate":
           // setProgressItems((prev) => [...prev, e.data]);
+          chrome.runtime.sendMessage({
+            type: "progress",
+            message: 0,
+          });
           break;
 
         case "progress":
@@ -228,6 +246,11 @@ function startWorker() {
           //     return item;
           //   })
           // );
+          console.log("progress", e);
+          chrome.runtime.sendMessage({
+            type: "progress",
+            message: e.data.progress,
+          });
           break;
 
         case "done":
@@ -268,10 +291,10 @@ function startWorker() {
           break;
 
         case "complete":
-          // Generation complete: re-enable the "Generate" button
-          // setIsProcessing(false);
-          // setText(e.data.output);
-          const transcript = e.data.output[0].replace(/[\[\]]/g, "");
+          const transcript = e.data.output[0]
+            .replace(/\[[.+?]\]/g, "")
+            .replace(/\[(.+?)\]/g, "")
+            .trim();
           console.log("complete", e);
           if (speechStarted) {
             chrome.runtime.sendMessage({
@@ -284,16 +307,8 @@ function startWorker() {
       }
     };
     worker.addEventListener("message", onMessageReceived);
+  } else {
+    startUserMedia();
   }
   // Attach the callback function as an event listener.
-
-  navigator.mediaDevices.enumerateDevices().then(function (devices) {
-    console.log(
-      "devices",
-      devices.map((d) => d.label)
-    );
-    console.log("devices", devices);
-    chosenDevice = devices[0];
-    allDevices = devices;
-  });
 }

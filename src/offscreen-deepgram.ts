@@ -102,8 +102,8 @@ function startUserMedia() {
     {
       audio: {
         latency: 0.002,
+        deviceId: chosenDevice.deviceId,
       },
-      deviceId: chosenDevice.deviceId,
     },
     function (stream) {
       console.log("started webkit audio");

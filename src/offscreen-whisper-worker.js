@@ -8,6 +8,8 @@ import {
 
 const MAX_NEW_TOKENS = 64;
 
+let model_id_param = "onnx-community/whisper-tiny.en";
+
 /**
  * This class uses the Singleton pattern to ensure that only one instance of the model is loaded.
  */
@@ -18,7 +20,7 @@ class AutomaticSpeechRecognitionPipeline {
   static model = null;
 
   static async getInstance(progress_callback = null) {
-    this.model_id = "onnx-community/whisper-base";
+    this.model_id = model_id_param;
 
     this.tokenizer ??= AutoTokenizer.from_pretrained(this.model_id, {
       progress_callback,
@@ -83,7 +85,7 @@ async function generate({ audio, language }) {
   const outputs = await model.generate({
     ...inputs,
     max_new_tokens: MAX_NEW_TOKENS,
-    language,
+    // language,
     streamer,
   });
 
@@ -127,10 +129,13 @@ async function load() {
 }
 // Listen for messages from the main thread
 self.addEventListener("message", async (e) => {
-  const { type, data } = e.data;
+  const { type, data, modelId } = e.data;
 
   switch (type) {
     case "load":
+      if (modelId) {
+        model_id_param = modelId;
+      }
       load();
       break;
 

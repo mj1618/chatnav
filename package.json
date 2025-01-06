@@ -12,6 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@huggingface/transformers": "^3.2.4",
     "@ricky0123/vad": "^0.2.4",
     "@soundcut/decode-audio-data-fast": "^2.0.1",
