@@ -1,5 +1,4 @@
 import { ChevronUpDownIcon } from "@heroicons/react/16/solid";
-import { ChevronDownIcon } from "@heroicons/react/24/solid";
 import { useState } from "react";
 
 import { useEffect } from "react";
@@ -66,7 +65,7 @@ function App() {
     setChosenDevice(device);
     chrome.runtime.sendMessage({
       type: "set-device",
-      device,
+      deviceId: device.deviceId,
     });
   };
 

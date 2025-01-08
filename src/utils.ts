@@ -86,3 +86,23 @@ export const getTabById = async (tabId: number | undefined) => {
   }
   return tab;
 };
+
+export async function selectDevice(
+  deviceId?: string | number | undefined
+): Promise<InputDeviceInfo> {
+  const allDevices = (await navigator.mediaDevices.enumerateDevices()).filter(
+    (d) => d.kind === "audioinput"
+  ) as InputDeviceInfo[];
+  let found = allDevices.find((d) => d.deviceId === deviceId);
+  if (!found) {
+    found = allDevices[0];
+  }
+
+  return found;
+}
+
+export async function getAllDevices() {
+  return (await navigator.mediaDevices.enumerateDevices()).filter(
+    (d) => d.kind === "audioinput"
+  ) as InputDeviceInfo[];
+}

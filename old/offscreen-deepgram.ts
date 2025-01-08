@@ -1,6 +1,7 @@
 import { MicVAD } from "@ricky0123/vad";
+import { audioSettings } from "./audio-settings";
 import { ChatNavMessage } from "./types";
-import { concatArrays } from "./utils";
+import { concatArrays, getAllDevices, selectDevice } from "./utils";
 
 declare global {
   interface Window {
@@ -16,17 +17,11 @@ let connection: {
   on: (event: string, callback: (data: any) => void) => void;
 } | null = null;
 let { createClient } = window.deepgram;
-let chosenDevice: MediaDeviceInfo;
-let allDevices: MediaDeviceInfo[];
 let micStatus: "on" | "off" | "loading" = "off";
 let speeches: string[] = [];
 let triedPermission = false;
 let mediaStream: MediaStream;
-
-let isSpeaking = true;
-let lastSpeakingTime = -1;
-var detectSoundId = 0;
-let lastSpeechEndTime = -1;
+let chosenDevice: InputDeviceInfo | null = null;
 
 function stop() {
   try {
@@ -52,7 +47,7 @@ function stop() {
 
 start();
 
-chrome.runtime.onMessage.addListener(function (
+chrome.runtime.onMessage.addListener(async function (
   message: ChatNavMessage,
   sender: any,
   sendResponse: any
@@ -60,7 +55,7 @@ chrome.runtime.onMessage.addListener(function (
   if (message.type === "mic-permission-granted") {
     start();
   } else if (message.type === "set-device") {
-    chosenDevice = message.device;
+    chosenDevice = await selectDevice(message.deviceId);
     if (micStatus === "on") {
       stop();
       start();
@@ -68,7 +63,7 @@ chrome.runtime.onMessage.addListener(function (
   } else if (message.type === "request-devices") {
     chrome.runtime.sendMessage({
       type: "devices",
-      devices: allDevices,
+      devices: await getAllDevices(),
       chosenDevice: chosenDevice,
     });
   } else if (message.type === "stop-mic") {
@@ -96,13 +91,12 @@ chrome.runtime.onMessage.addListener(function (
 
 let speechStarted = false;
 
-function startUserMedia() {
-  console.log("startUserMedia", chosenDevice);
+async function startUserMedia() {
   navigator.webkitGetUserMedia(
     {
       audio: {
-        latency: 0.002,
-        deviceId: chosenDevice.deviceId,
+        ...audioSettings,
+        deviceId: chosenDevice!.deviceId,
       },
     },
     function (stream) {
@@ -118,9 +112,7 @@ function startUserMedia() {
         baseAssetPath: "/lib/",
         onnxWASMBasePath: "/lib/",
         stream,
-        additionalAudioConstraints: {
-          latency: 0.002,
-        },
+
         onSpeechStart: function () {
           console.log("speech start");
           speechStarted = true;
@@ -136,14 +128,14 @@ function startUserMedia() {
             if (connection && connection.getReadyState() === WebSocket.OPEN) {
               connection.send(JSON.stringify({ type: "Finalize" }));
             }
-          }, 300);
+          }, 1000);
           // const wavBuffer = vad.utils.encodeWAV(arr);
           // const base64 = vad.utils.arrayBufferToBase64(wavBuffer);
           // const url = `data:audio/wav;base64,${base64}`;
           // console.log("speech end", url);
 
           speechStarted = false;
-          lastSpeechEndTime = new Date().getTime();
+          // lastSpeechEndTime = new Date().getTime();
           // const wavBuffer = vad.utils.encodeWAV(concatArrays(bufs));
           // const url = `<audio controls autoplay src="data:audio/wav;base64,${vad.utils.arrayBufferToBase64(
           //   wavBuffer
@@ -240,27 +232,13 @@ function startUserMedia() {
   );
 }
 
-function start() {
+async function start() {
   micStatus = "loading";
   chrome.runtime.sendMessage({
     type: "mic-loading",
   });
-  if (chosenDevice) {
-    // startSpeechRecognition();
-    startDeepgram();
-    return;
-  }
-  navigator.mediaDevices.enumerateDevices().then(function (devices) {
-    console.log(
-      "devices",
-      devices.map((d) => d.label)
-    );
-    console.log("devices", devices);
-    chosenDevice = devices[0];
-    allDevices = devices;
-    // startSpeechRecognition();
-    startDeepgram();
-  });
+  chosenDevice = await selectDevice();
+  startDeepgram();
 }
 
 setInterval(() => {
@@ -274,7 +252,7 @@ setInterval(() => {
   }
 }, 3000); // Sending KeepAlive messages every 3 seconds
 
-function startDeepgram() {
+async function startDeepgram() {
   const client = createClient("162c389cf3aac80cc803d8533c2df3e683d73c59");
 
   let is_finals: string[] = [];
@@ -286,7 +264,7 @@ function startDeepgram() {
     smart_format: true,
     encoding: "linear32",
     channels: 1,
-    sample_rate: 16000,
+    sample_rate: audioSettings(chosenDevice!).sampleRate,
     // To get UtteranceEnd, the following must be set:
     interim_results: true,
     utterance_end_ms: 1000,

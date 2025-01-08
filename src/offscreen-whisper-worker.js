@@ -8,7 +8,7 @@ import {
 
 const MAX_NEW_TOKENS = 64;
 
-let model_id_param = "onnx-community/whisper-tiny.en";
+let model_id_param = "onnx-community/whisper-base.en";
 
 /**
  * This class uses the Singleton pattern to ensure that only one instance of the model is loaded.
@@ -33,7 +33,10 @@ class AutomaticSpeechRecognitionPipeline {
       this.model_id,
       {
         dtype: {
-          encoder_model: "fp32", // 'fp16' works too
+          encoder_model:
+            model_id_param === "onnx-community/whisper-large-v3-turbo"
+              ? "fp16"
+              : "fp32", // 'fp16' works too
           decoder_model_merged: "q4", // or 'fp32' ('fp16' is broken)
         },
         device: "webgpu",
@@ -122,7 +125,15 @@ async function load() {
 
   // Run model with dummy input to compile shaders
   await model.generate({
-    input_features: full([1, 80, 3000], 0.0),
+    // input_features: full([1, 80, 3000], 0.0),
+    input_features: full(
+      [
+        1,
+        model_id_param === "onnx-community/whisper-large-v3-turbo" ? 128 : 80,
+        3000,
+      ],
+      0.0
+    ),
     max_new_tokens: 1,
   });
   self.postMessage({ status: "ready" });

@@ -1,61 +1,58 @@
-
-
 let mediaRecorder;
 let connection;
 let chosenDevice;
 let allDevices;
 let isMicOn = false;
-let recognition;
+let recognition: SpeechRecognition = new (window.SpeechRecognition ||
+  window.webkitSpeechRecognition)();
 let triedPermission = false;
 
-let finals = [];
+let finals: string[] = [];
 let currentInterim = "";
+let shouldRestart = false;
 
 start();
 
+navigator.permissions
+  // @ts-ignore
+  .query({ name: "microphone" })
+  .then(function (permissionStatus) {
+    if (permissionStatus.state === "granted") {
+      start();
+    } else if (permissionStatus.state === "prompt") {
+      chrome.runtime.sendMessage({
+        type: "mic-permission-denied",
+      });
+    } else {
+      chrome.runtime.sendMessage({
+        type: "mic-permission-denied",
+      });
+    }
 
-navigator.permissions.query(
-  { name: 'microphone' }
-).then(function(permissionStatus){
-  if(permissionStatus.state === "granted") {
-    start();
-  } else if(permissionStatus.state === "prompt") {
-    chrome.runtime.sendMessage({
-      type: "mic-permission-denied",
-    });
-  } else {
-    chrome.runtime.sendMessage({
-      type: "mic-permission-denied",
-    });
-  }
+    console.log(permissionStatus.state); // granted, denied, prompt
 
-  console.log(permissionStatus.state); // granted, denied, prompt
-
-  permissionStatus.onchange = function(){
+    permissionStatus.onchange = function () {
       console.log("Permission changed to " + this.state);
-  }
+    };
+  });
 
-})
-
-chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   if (message.type === "mic-permission-granted") {
     start();
   } else if (message.type === "set-device") {
     chosenDevice = message.device;
-    if(isMicOn) {
+    if (isMicOn) {
       stop();
       start();
     }
   } else if (message.type === "request-devices") {
     chrome.runtime.sendMessage({
       type: "devices",
-      devices: allDevices,
-      chosenDevice: chosenDevice,
     });
   } else if (message.type === "stop-mic") {
     stop();
   } else if (message.type === "start-mic") {
-    if(!isMicOn) {
+    if (!isMicOn) {
       start();
     }
   } else if (message.type === "request-mic-status") {
@@ -77,17 +74,17 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
 });
 
 function start() {
+  shouldRestart = true;
   startSpeechRecognition();
 }
 
 function startSpeechRecognition() {
-  recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
   recognition.continuous = true;
   recognition.interimResults = true;
   recognition.lang = "en-US";
   recognition.maxAlternatives = 1;
 
-  recognition.onstart = function() {
+  recognition.onstart = function () {
     console.log("speechRecognition onstart");
     isMicOn = true;
     chrome.runtime.sendMessage({
@@ -95,13 +92,13 @@ function startSpeechRecognition() {
     });
   };
 
-  recognition.onresult = function(event) {
+  recognition.onresult = function (event: SpeechRecognitionEvent) {
     let interim = "";
     let final = "";
-    for(let i = event.resultIndex; i < event.results.length; i++) {
+    for (let i = event.resultIndex; i < event.results.length; i++) {
       console.log("speechRecognition onresult", event.results[i]);
-      
-      if(event.results[i].isFinal) {
+
+      if (event.results[i].isFinal) {
         final += event.results[i][0].transcript;
         interim = "";
       } else {
@@ -109,15 +106,16 @@ function startSpeechRecognition() {
       }
     }
 
-    if(final.length > 0) {
+    if (final.length > 0) {
       finals.push(final);
+      currentInterim = "";
       chrome.runtime.sendMessage({
         type: "speech-final",
         message: final,
       });
     }
 
-    if(interim.length > 0) {
+    if (interim.length > 0) {
       currentInterim = interim;
       chrome.runtime.sendMessage({
         type: "interim-results",
@@ -126,21 +124,28 @@ function startSpeechRecognition() {
     }
   };
 
-  recognition.onend = function() {
+  recognition.onend = function () {
     console.log("speechRecognition onend");
-    isMicOn = false;
-    recognition.start();
-    // chrome.runtime.sendMessage({
-    //   type: "mic-turned-off",
-    // });
+
+    if (shouldRestart) {
+      recognition.start();
+    } else {
+      isMicOn = false;
+      chrome.runtime.sendMessage({
+        type: "mic-turned-off",
+      });
+    }
   };
 
-  recognition.onerror = function(event) {
+  recognition.onerror = function (event) {
     console.log("speechRecognition onerror", event);
     isMicOn = false;
-    if(event.error === "not-allowed" || event.error === "service-not-allowed") {
-      
-      if(!triedPermission) {
+    if (
+      event.error === "not-allowed" ||
+      event.error === "service-not-allowed"
+    ) {
+      shouldRestart = false;
+      if (!triedPermission) {
         chrome.runtime.sendMessage({
           type: "mic-permission-denied",
         });
@@ -153,7 +158,6 @@ function startSpeechRecognition() {
     } else {
       recognition.start();
     }
-
   };
 
   recognition.start();
@@ -161,16 +165,10 @@ function startSpeechRecognition() {
   console.log("speechRecognition trying to start");
 }
 
-
 function stop() {
   try {
-    if(recognition) {
-      recognition.stop();
-    }
-    isMicOn = false;
-    chrome.runtime.sendMessage({
-      type: "mic-turned-off",
-    });
+    shouldRestart = false;
+    recognition.stop();
   } catch (e) {
     console.error("Error stopping mic", e);
   }

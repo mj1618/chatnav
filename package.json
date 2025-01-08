@@ -19,12 +19,14 @@
     "onnxruntime-web": "^1.20.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "vite-plugin-mkcert": "^1.17.6",
     "vite-plugin-singlefile": "^2.1.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.289",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "@types/webspeechapi": "^0.0.29",
     "@typescript-eslint/eslint-plugin": "^7.13.1",
     "@typescript-eslint/parser": "^7.13.1",
     "@vitejs/plugin-react": "^4.3.1",

@@ -8,7 +8,7 @@ export type ChatNavMessage =
     }
   | {
       type: "set-device";
-      device: MediaDeviceInfo;
+      deviceId: string | number;
     }
   | {
       type: "request-devices";

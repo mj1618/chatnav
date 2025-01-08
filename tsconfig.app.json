@@ -23,5 +23,5 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src", "public/old/offscreen-whisper-old.ts"]
+  "include": ["src", "src/offscreen-whisper-worker.js"]
 }

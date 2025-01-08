@@ -53,6 +53,7 @@ declare global {
     if (message.type === "interim-results") {
       showMessage(message.message);
     } else if (message.type === "speech-final") {
+      showMessage(message.message);
       const cmd = await findCommand(message.message, window.location.href);
       console.log("speech-final", message, cmd);
       if (cmd != null && cmd.environment === "content-script") {

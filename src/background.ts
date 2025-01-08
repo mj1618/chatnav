@@ -50,6 +50,7 @@ chrome.runtime.onMessage.addListener(async function (
     if (message.message.trim().length === 0) {
       return;
     }
+    console.log("speech-final", message);
     const tab = await activeTab();
     if (tab != null) {
       sendTabMessage(tab.id!, "speech-final", message.message);
@@ -95,14 +96,6 @@ chrome.offscreen.createDocument({
 chrome.action.setBadgeBackgroundColor({
   color: "red",
 });
-
-// let i = 0;
-// setInterval(() => {
-//   i = (i + 1) % 3;
-//   chrome.action.setBadgeText({
-//     text: ".".repeat(i + 1),
-//   });
-// }, 1000);
 
 chrome.runtime.onStartup.addListener(() => {
   console.log(`prevent from going inactive`);
