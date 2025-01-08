@@ -95,7 +95,10 @@ export async function selectDevice(
   ) as InputDeviceInfo[];
   let found = allDevices.find((d) => d.deviceId === deviceId);
   if (!found) {
-    found = allDevices[0];
+    found = allDevices.find((d) => d.label.includes("Studio"));
+    if (!found) {
+      found = allDevices[0];
+    }
   }
 
   return found;

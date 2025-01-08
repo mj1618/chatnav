@@ -47,6 +47,8 @@ function stop() {
 
 start();
 
+let inferenceStartTime = 0;
+
 chrome.runtime.onMessage.addListener(async function (
   message: ChatNavMessage,
   sender: any,
@@ -95,7 +97,7 @@ async function startUserMedia() {
   navigator.webkitGetUserMedia(
     {
       audio: {
-        ...audioSettings,
+        ...audioSettings(chosenDevice!, { sampleRate: 16_000 }),
         deviceId: chosenDevice!.deviceId,
       },
     },
@@ -120,15 +122,26 @@ async function startUserMedia() {
             clearInterval(finalizeInterval);
           }
         },
+        onVADMisfire: function () {
+          console.log("vad misfire");
+          if (finalizeInterval != null) {
+            clearInterval(finalizeInterval);
+          }
+          speechStarted = false;
+        },
         onSpeechEnd: function (arr: Float32Array) {
+          console.log("speech end", arr.length);
+          inferenceStartTime = new Date().getTime();
           if (finalizeInterval != null) {
             clearInterval(finalizeInterval);
           }
           finalizeInterval = setInterval(() => {
             if (connection && connection.getReadyState() === WebSocket.OPEN) {
               connection.send(JSON.stringify({ type: "Finalize" }));
+            } else {
+              console.log("not sending finalize");
             }
-          }, 1000);
+          }, 200);
           // const wavBuffer = vad.utils.encodeWAV(arr);
           // const base64 = vad.utils.arrayBufferToBase64(wavBuffer);
           // const url = `data:audio/wav;base64,${base64}`;
@@ -159,6 +172,7 @@ async function startUserMedia() {
               prebufs = [];
             }
             connection.send(data);
+            // console.log("sent dataavailable", data.length);
           } else {
             // console.log(
             //   "not sending dataavailable",
@@ -167,7 +181,7 @@ async function startUserMedia() {
             // );
             prebufs.push(data);
             if (prebufs.length > 30) {
-              prebufs.shift();
+              prebufs.slice(-30);
             }
           }
         },
@@ -264,7 +278,8 @@ async function startDeepgram() {
     smart_format: true,
     encoding: "linear32",
     channels: 1,
-    sample_rate: audioSettings(chosenDevice!).sampleRate,
+    sample_rate: audioSettings(chosenDevice!, { sampleRate: 16_000 })
+      .sampleRate,
     // To get UtteranceEnd, the following must be set:
     interim_results: true,
     utterance_end_ms: 1000,
@@ -342,6 +357,12 @@ async function startDeepgram() {
         speeches.push(finals);
         is_finals = [];
         console.log(`speech_final onresults: ${finals}`);
+
+        console.log(
+          "inference time",
+          new Date().getTime() - inferenceStartTime
+        );
+        // inferenceStartTime = 0;
 
         chrome.runtime.sendMessage({
           type: "speech-final",

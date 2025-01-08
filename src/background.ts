@@ -10,7 +10,7 @@ const MicModes = {
   whisper: "whisper",
 };
 
-const MicMode = MicModes.whisper;
+const MicMode = MicModes.deepgram;
 
 chrome.runtime.onMessage.addListener(async function (
   message,
@@ -86,12 +86,14 @@ chrome.runtime.onMessage.addListener(async function (
   }
 });
 
-chrome.offscreen.createDocument({
-  url: chrome.runtime.getURL("offscreen-whisper.html"),
-  // @ts-ignore
-  reasons: ["USER_MEDIA"],
-  justification: "capturing mic audio",
-});
+if (MicMode === MicModes.deepgram || MicMode === MicModes.whisper) {
+  chrome.offscreen.createDocument({
+    url: chrome.runtime.getURL(`offscreen-${MicMode}.html`),
+    // @ts-ignore
+    reasons: ["USER_MEDIA"],
+    justification: "capturing mic audio",
+  });
+}
 
 chrome.action.setBadgeBackgroundColor({
   color: "red",
