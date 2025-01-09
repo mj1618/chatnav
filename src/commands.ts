@@ -211,6 +211,10 @@ const gmailCommandGroup: CommandGroup = {
                 window.focus();
                 (el2[0] as HTMLElement).focus();
                 (el2[0] as HTMLElement).click();
+                el2[0].dispatchEvent(new Event("input", { bubbles: true }));
+                el2[0].dispatchEvent(
+                  new PointerEvent("pointerdown", { bubbles: true })
+                );
               }
             }, 100);
           },

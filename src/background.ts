@@ -10,7 +10,7 @@ const MicModes = {
   whisper: "whisper",
 };
 
-const MicMode = MicModes.whisper;
+const MicMode = MicModes.browser;
 
 chrome.runtime.onMessage.addListener(async function (
   message,
@@ -53,6 +53,9 @@ chrome.runtime.onMessage.addListener(async function (
     console.log("speech-final", message);
     const tab = await activeTab();
     if (tab != null) {
+      chrome.tabs.update(tab.id!, {
+        active: true,
+      });
       sendTabMessage(tab.id!, "speech-final", message.message);
     }
     const cmd = await findCommand(message.message, tab?.url);
@@ -93,6 +96,8 @@ if (MicMode === MicModes.deepgram || MicMode === MicModes.whisper) {
     reasons: ["USER_MEDIA"],
     justification: "capturing mic audio",
   });
+} else if (MicMode === MicModes.browser) {
+  createRecordTab();
 }
 
 chrome.action.setBadgeBackgroundColor({
