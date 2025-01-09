@@ -119,13 +119,13 @@ async function startUserMedia() {
           console.log("speech start");
           speechStarted = true;
           if (finalizeInterval != null) {
-            clearInterval(finalizeInterval);
+            clearTimeout(finalizeInterval);
           }
         },
         onVADMisfire: function () {
           console.log("vad misfire");
           if (finalizeInterval != null) {
-            clearInterval(finalizeInterval);
+            clearTimeout(finalizeInterval);
           }
           speechStarted = false;
         },
@@ -133,9 +133,9 @@ async function startUserMedia() {
           console.log("speech end", arr.length);
           inferenceStartTime = new Date().getTime();
           if (finalizeInterval != null) {
-            clearInterval(finalizeInterval);
+            clearTimeout(finalizeInterval);
           }
-          finalizeInterval = setInterval(() => {
+          finalizeInterval = setTimeout(() => {
             if (connection && connection.getReadyState() === WebSocket.OPEN) {
               connection.send(JSON.stringify({ type: "Finalize" }));
             } else {
@@ -256,7 +256,11 @@ async function start() {
 }
 
 setInterval(() => {
-  if (connection && connection.getReadyState() === WebSocket.OPEN) {
+  if (
+    !speechStarted &&
+    connection &&
+    connection.getReadyState() === WebSocket.OPEN
+  ) {
     console.log("sending keepalive");
     connection.send(
       JSON.stringify({
@@ -286,6 +290,7 @@ async function startDeepgram() {
     vad_events: true,
     // Time in milliseconds of silence to wait for before finalizing speech
     endpointing: 300,
+
     // keywords: ["open", "tab"],
   });
 

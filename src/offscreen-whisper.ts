@@ -16,8 +16,8 @@ let lastComputedTranscript = "";
 let worker: Worker;
 let speechStarted = false;
 let chosenDevice: InputDeviceInfo | null = null;
-let modelId = "onnx-community/whisper-large-v3-turbo";
-// let modelId = "onnx-community/whisper-tiny.en";
+// let modelId = "onnx-community/whisper-large-v3-turbo";
+let modelId = "onnx-community/whisper-base.en";
 
 function stopAll() {
   try {
@@ -83,6 +83,8 @@ chrome.runtime.onMessage.addListener(async function (
   }
 });
 
+let toFinalize: Float32Array[] = [];
+
 async function startUserMedia() {
   stopAll();
   micStatus = "loading";
@@ -112,25 +114,6 @@ async function startUserMedia() {
       let bufs: Float32Array[] = [];
       let prebufs: Float32Array[] = [];
 
-      const onSpeechStart = () => {
-        console.log("speech start");
-        speechStarted = true;
-        bufs = [...prebufs];
-        prebufs = [];
-      };
-
-      const onSpeechEnd = () => {
-        console.log("speech end");
-
-        // chrome.runtime.sendMessage({
-        //   type: "speech-final",
-        //   message: lastComputedTranscript,
-        // });
-        bufs = [];
-
-        speechStarted = false;
-      };
-
       vad.MicVAD.new({
         // model: "v5",
         baseAssetPath: "/lib/",
@@ -144,16 +127,22 @@ async function startUserMedia() {
           data: Float32Array
         ) {
           if (probs.isSpeech > 0.5 && !speechStarted) {
-            onSpeechStart();
+            console.log("speech start");
+            speechStarted = true;
+            bufs = [...prebufs];
+            prebufs = [];
           }
 
           if (speechStarted) {
             console.log("pushing started speech", data.length);
             bufs.push(data);
-            // worker.postMessage({
-            //   type: "generate",
-            //   data: { audio: concatArrays(bufs), language: "en" },
-            // });
+            if (!whisperIsProcessing) {
+              whisperIsProcessing = true;
+              worker.postMessage({
+                type: "generate",
+                data: { audio: concatArrays(bufs), language: "en" },
+              });
+            }
           } else {
             prebufs.push(data);
             // console.log("pushing prebufs", prebufs.length);
@@ -162,23 +151,32 @@ async function startUserMedia() {
             }
           }
 
-          if (probs.isSpeech > 0.5) {
+          if (probs.isSpeech > 0.2) {
             console.log("setting lastSpeechTime", new Date().getTime());
             lastSpeechTime = new Date().getTime();
           }
 
           if (
             probs.isSpeech < 0.2 &&
-            speechStarted
-            // new Date().getTime() - lastSpeechTime > 1_000
+            speechStarted &&
+            new Date().getTime() - lastSpeechTime > 10
           ) {
+            console.log("speech end");
             console.log("onSpeechEnd", bufs.length, prebufs.length);
 
-            worker.postMessage({
-              type: "generate",
-              data: { audio: concatArrays(bufs), language: "en" },
-            });
-            onSpeechEnd();
+            if (whisperIsProcessing) {
+              toFinalize.push(concatArrays(bufs));
+            } else {
+              whisperIsProcessing = true;
+              worker.postMessage({
+                type: "generate",
+                data: { audio: concatArrays(bufs), language: "en" },
+              });
+            }
+
+            bufs = [];
+
+            speechStarted = false;
           }
         },
       }).then((v: MicVAD) => {
@@ -205,6 +203,8 @@ async function startUserMedia() {
   );
 }
 
+let whisperIsProcessing = false;
+
 async function startWorker() {
   micStatus = "loading";
   chrome.runtime.sendMessage({
@@ -223,7 +223,6 @@ async function startWorker() {
       modelId,
     });
 
-    let isProcessing = false;
     let interim = "";
     let inferenceStartTime = 0;
     const onMessageReceived = (e: any) => {
@@ -279,11 +278,12 @@ async function startWorker() {
         case "start":
           {
             // Start generation
-            // setIsProcessing(true);
+            // setwhisperIsProcessing(true);
             // Request new data from the recorder
             // mediaRecorder.requestData();
             console.log("inference started", e.data);
             inferenceStartTime = new Date().getTime();
+            whisperIsProcessing = true;
           }
           break;
 
@@ -302,6 +302,7 @@ async function startWorker() {
             //   message: interim,
             // });
             console.log("inference update", e.data);
+            whisperIsProcessing = true;
           }
           break;
 
@@ -328,6 +329,16 @@ async function startWorker() {
               type: "speech-final",
               message: transcript,
             });
+          }
+
+          if (toFinalize.length > 0) {
+            whisperIsProcessing = true;
+            worker.postMessage({
+              type: "generate",
+              data: { audio: toFinalize.shift(), language: "en" },
+            });
+          } else {
+            whisperIsProcessing = false;
           }
           break;
       }

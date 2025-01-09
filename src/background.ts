@@ -10,7 +10,7 @@ const MicModes = {
   whisper: "whisper",
 };
 
-const MicMode = MicModes.deepgram;
+const MicMode = MicModes.whisper;
 
 chrome.runtime.onMessage.addListener(async function (
   message,
