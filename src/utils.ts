@@ -17,18 +17,29 @@ export function concatArrays(arrays: Float32Array[]) {
   return outArray;
 }
 
-let recordTab: chrome.tabs.Tab | null = null;
-export async function createRecordTab() {
-  if (recordTab != null) {
-    return;
+export const stopAllRecordTabs = async () => {
+  const recordTabs = (
+    await chrome.tabs.query({
+      pinned: true,
+    })
+  ).filter((t) => t.url?.includes("record.html"));
+
+  console.log("stopping all record tabs", recordTabs);
+
+  for (const tab of recordTabs) {
+    await chrome.tabs.remove(tab.id!);
   }
-  recordTab = await chrome.tabs.create({
+};
+
+export async function createRecordTab() {
+  await stopAllRecordTabs();
+  const recordTab = await chrome.tabs.create({
     url: chrome.runtime.getURL("record.html"),
     pinned: true,
     active: false,
   });
   chrome.tabs.onUpdated.addListener(function listener(tabId, changeInfo) {
-    if (tabId === recordTab!.id && changeInfo.status === "complete") {
+    if (tabId === recordTab.id && changeInfo.status === "complete") {
       chrome.tabs.onUpdated.removeListener(listener);
     }
   });
@@ -108,4 +119,140 @@ export async function getAllDevices() {
   return (await navigator.mediaDevices.enumerateDevices()).filter(
     (d) => d.kind === "audioinput"
   ) as InputDeviceInfo[];
+}
+
+export const sendKeyboardEvent = () => {
+  const keyboardEvent = document.createEvent("KeyboardEvent");
+  const initMethod =
+    typeof keyboardEvent.initKeyboardEvent !== "undefined"
+      ? "initKeyboardEvent"
+      : "initKeyEvent";
+
+  // @ts-ignore
+  keyboardEvent[initMethod](
+    "keydown", // event type: keydown, keyup, keypress
+    true, // bubbles
+    true, // cancelable
+    window, // view: should be window
+    false, // ctrlKey
+    false, // altKey
+    false, // shiftKey
+    false, // metaKey
+    65, // keyCode: unsigned long - the virtual key code, else 0
+    0 // charCode: unsigned long - the Unicode character associated with the depressed key, else 0
+  );
+  document.dispatchEvent(keyboardEvent);
+};
+
+const findTag = ({
+  tagName,
+  textContent,
+  attributes,
+  hasChildren,
+}: {
+  tagName: string;
+  textContent?: string;
+  attributes?: Record<string, string>;
+  hasChildren?: boolean;
+}) => {
+  const tags = document.getElementsByTagName(tagName);
+  console.log("tags", tags.length);
+  const found = [];
+  for (var i = 0; i < tags.length; i++) {
+    var curr = tags[i];
+    let valid = true;
+    if (textContent != null && curr.textContent !== textContent) {
+      valid = false;
+    }
+    if (attributes != null) {
+      for (const [key, value] of Object.entries(attributes)) {
+        if (curr.attributes.getNamedItem(key)?.nodeValue !== value) {
+          valid = false;
+        }
+      }
+    }
+    if (hasChildren != null) {
+      if (hasChildren === true) {
+        if (curr.children == null || curr.children.length === 0) {
+          valid = false;
+        }
+      } else {
+        if (curr.children != null && curr.children.length > 0) {
+          valid = false;
+        }
+      }
+    }
+    if (valid) {
+      found.push(curr);
+    }
+  }
+  return found;
+};
+
+// words from one to twenty
+export const oneToTwenty = [
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
+  "thirteen",
+  "fourteen",
+  "fifteen",
+  "sixteen",
+  "seventeen",
+  "eighteen",
+  "nineteen",
+];
+
+// words from twenty to ninety
+export const twentyToNinety = [
+  "twenty",
+  "thirty",
+  "forty",
+  "fifty",
+  "sixty",
+  "seventy",
+  "eighty",
+  "ninety",
+];
+
+export const hundredToThousand = ["hundred", "thousand"];
+
+const homophones = ["to", "too"];
+
+export const allNumberWords = oneToTwenty
+  .concat(twentyToNinety)
+  .concat(hundredToThousand)
+  .concat(homophones);
+
+export const parseWordsToNumbers = (str: string) => {
+  const words = str
+    .split(" ")
+    .map((s) => (s === "to" || s === "too" ? "two" : s));
+  console.log("parse", words);
+  for (let n = 0; n < oneToTwenty.length; n++) {
+    if (words.includes(oneToTwenty[n])) {
+      return n + 1;
+    }
+  }
+  return 0;
+};
+
+export function findLastIndex<T>(
+  array: Array<T>,
+  predicate: (value: T, index: number, obj: T[]) => boolean
+): number {
+  let l = array.length;
+  while (l--) {
+    if (predicate(array[l], l, array)) return l;
+  }
+  return -1;
 }

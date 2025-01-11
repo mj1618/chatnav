@@ -1,4 +1,4 @@
-import { findCommand } from "./commands";
+import { executeCommand } from "./commands";
 
 declare global {
   interface Window {
@@ -54,11 +54,12 @@ declare global {
       showMessage(message.message);
     } else if (message.type === "speech-final") {
       showMessage(message.message);
-      const cmd = await findCommand(message.message, window.location.href);
-      console.log("speech-final", message, cmd);
-      if (cmd != null && cmd.environment === "content-script") {
-        cmd.action();
-      }
+      // const cmd = await findCommand(message.message, window.location.href);
+      // console.log("speech-final", message, cmd);
+      // if (cmd != null && cmd.environment === "content-script") {
+      //   cmd.action();
+      // }
+      executeCommand(message.message);
     }
   });
 })();

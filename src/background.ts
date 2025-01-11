@@ -1,8 +1,11 @@
-import { findCommand } from "./commands";
-import { activeTab, createRecordTab, sendTabMessage } from "./utils";
+import {
+  activeTab,
+  createRecordTab,
+  sendTabMessage,
+  stopAllRecordTabs,
+} from "./utils";
 
 let triedPermission = false;
-let recordTab: chrome.tabs.Tab | null = null;
 
 const MicModes = {
   deepgram: "deepgram",
@@ -30,8 +33,8 @@ chrome.runtime.onMessage.addListener(async function (
         url: "request-mic.html",
       });
     } else if (MicMode === MicModes.browser) {
-      chrome.tabs.update(recordTab!.id!, {
-        active: true,
+      chrome.tabs.create({
+        url: "request-mic.html",
       });
     }
   } else if (message.type === "interim-results") {
@@ -58,10 +61,10 @@ chrome.runtime.onMessage.addListener(async function (
       });
       sendTabMessage(tab.id!, "speech-final", message.message);
     }
-    const cmd = await findCommand(message.message, tab?.url);
-    if (cmd != null && cmd.environment === "service-worker") {
-      cmd.action();
-    }
+    // const cmd = await findCommand(message.message, tab?.url);
+    // if (cmd != null && cmd.environment === "service-worker") {
+    //   cmd.action();
+    // }
   } else if (message.type === "start-mic") {
     if (MicMode === MicModes.deepgram || MicMode === MicModes.whisper) {
       // do nothing, offscreen is already running
@@ -83,27 +86,40 @@ chrome.runtime.onMessage.addListener(async function (
         128: "assets/mic-black.png",
       },
     });
-    // chrome.action.setBadgeText({
-    //   text: "",
-    // });
+    await stopAllRecordTabs();
   }
 });
 
-if (MicMode === MicModes.deepgram || MicMode === MicModes.whisper) {
-  chrome.offscreen.createDocument({
-    url: chrome.runtime.getURL(`offscreen-${MicMode}.html`),
+const isOffscreenRunning = async () => {
+  const contexts = await chrome.runtime.getContexts({
     // @ts-ignore
-    reasons: ["USER_MEDIA"],
-    justification: "capturing mic audio",
+    contextTypes: ["OFFSCREEN_DOCUMENT"],
   });
-} else if (MicMode === MicModes.browser) {
-  createRecordTab();
-}
 
-chrome.action.setBadgeBackgroundColor({
-  color: "red",
-});
+  // @ts-ignore
+  return contexts != null && contexts.length > 0;
+};
 
-chrome.runtime.onStartup.addListener(() => {
-  console.log(`prevent from going inactive`);
-});
+(async () => {
+  if (MicMode === MicModes.deepgram || MicMode === MicModes.whisper) {
+    if (!(await isOffscreenRunning())) {
+      chrome.offscreen.createDocument({
+        url: chrome.runtime.getURL(`offscreen-${MicMode}.html`),
+        // @ts-ignore
+        reasons: ["USER_MEDIA"],
+        justification: "capturing mic audio",
+      });
+    }
+  } else if (MicMode === MicModes.browser) {
+    await stopAllRecordTabs();
+    createRecordTab();
+  }
+
+  chrome.action.setBadgeBackgroundColor({
+    color: "red",
+  });
+
+  chrome.runtime.onStartup.addListener(() => {
+    console.log(`prevent from going inactive`);
+  });
+})();

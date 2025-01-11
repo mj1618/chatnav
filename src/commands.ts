@@ -1,359 +1,249 @@
-import { activeTab } from "./utils";
+import { allNumberWords, findLastIndex, parseWordsToNumbers } from "./utils";
 
-const generalCommandGroup: CommandGroup = {
-  type: "group",
-  name: "general",
-  commands: [
-    {
-      type: "command",
-      name: "stop",
-      alternatives: ["stop", "off"],
-      subCommands: [
-        {
-          type: "leaf",
-          name: "mic",
-          alternatives: ["microphone", "recording"],
-          environment: "service-worker",
-          action: () => {
-            chrome.runtime.sendMessage({
-              type: "stop-mic",
-            });
-          },
-        },
-      ],
-    },
-    {
-      type: "command",
-      name: "start",
-      alternatives: ["start"],
-      subCommands: [
-        {
-          type: "leaf",
-          name: "mic",
-          alternatives: ["microphone", "recording"],
-          environment: "service-worker",
-          action: () => {
-            chrome.runtime.sendMessage({
-              type: "start-mic",
-            });
-          },
-        },
-      ],
-    },
-    {
-      type: "command",
-      name: "navigate",
-      alternatives: ["navigate", "go", "open"],
-      subCommands: [
-        {
-          type: "leaf",
-          name: "gmail",
-          alternatives: ["mail", "gmail"],
-          environment: "service-worker",
-          action: async () => {
-            const tab = await activeTab();
-            if (tab != null) {
-              chrome.tabs.update(tab.id!, {
-                url: "https://mail.google.com",
-              });
-            } else {
-              chrome.tabs.create({
-                url: "https://mail.google.com",
-              });
-            }
-          },
-        },
-        {
-          type: "leaf",
-          name: "tab",
-          alternatives: ["new tab"],
-          environment: "service-worker",
-          action: () => {
-            chrome.tabs.create({
-              url: "chrome://newtab",
-            });
-          },
-        },
-      ],
-    },
-    {
-      type: "command",
-      name: "go",
-      alternatives: ["go", "back"],
-      subCommands: [
-        {
-          type: "leaf",
-          name: "back",
-          alternatives: ["back"],
-          environment: "service-worker",
-          action: async () => {
-            const tab = await activeTab();
-            if (tab != null) {
-              chrome.tabs.goBack(tab.id!);
-            }
-          },
-        },
-      ],
-    },
-  ],
-};
+const grammar = [
+  "stop|start :microphone",
+  "navigate|go|open back|forward|tab|window|gmail",
+  "navigate|go|open url :site",
+  "compose|write email",
+  "stop|start writing|dictation",
 
-const findTag = ({
-  tagName,
-  textContent,
-  attributes,
-  hasChildren,
-}: {
-  tagName: string;
-  textContent?: string;
-  attributes?: Record<string, string>;
-  hasChildren?: boolean;
-}) => {
-  const tags = document.getElementsByTagName(tagName);
-  console.log("tags", tags.length);
-  const found = [];
-  for (var i = 0; i < tags.length; i++) {
-    var curr = tags[i];
-    let valid = true;
-    if (textContent != null && curr.textContent !== textContent) {
-      valid = false;
-    }
-    if (attributes != null) {
-      for (const [key, value] of Object.entries(attributes)) {
-        if (curr.attributes.getNamedItem(key)?.nodeValue !== value) {
-          valid = false;
-        }
-      }
-    }
-    if (hasChildren != null) {
-      if (hasChildren === true) {
-        if (curr.children == null || curr.children.length === 0) {
-          valid = false;
-        }
-      } else {
-        if (curr.children != null && curr.children.length > 0) {
-          valid = false;
-        }
-      }
-    }
-    if (valid) {
-      found.push(curr);
-    }
-  }
-  return found;
-};
-
-const gmailCommandGroup: CommandGroup = {
-  type: "group",
-  name: "gmail",
-  onlyOn: "https://mail.google.com",
-  commands: [
-    {
-      type: "command",
-      name: "new",
-      alternatives: ["start", "new", "compose", "write"],
-      subCommands: [
-        {
-          type: "leaf",
-          name: "email",
-          alternatives: ["email"],
-          environment: "content-script",
-          action: async () => {
-            const composeButton = findTag({
-              tagName: "div",
-              textContent: "Compose",
-              hasChildren: false,
-              attributes: {
-                role: "button",
-              },
-            });
-            if (composeButton.length > 0) {
-              (composeButton[0] as HTMLElement).click();
-            }
-          },
-        },
-      ],
-    },
-    {
-      type: "command",
-      name: "go",
-      alternatives: ["write"],
-      subCommands: [
-        {
-          type: "leaf",
-          name: "recipient",
-          alternatives: [],
-          environment: "content-script",
-          action: async () => {
-            const el = findTag({
-              tagName: "div",
-              textContent: "Recipients",
-              attributes: {
-                tabindex: "1",
-              },
-            });
-            console.log("el", el);
-            if (el.length > 0) {
-              window.focus();
-              (el[0] as HTMLElement).focus();
-              (el[0] as HTMLElement).click();
-            }
-
-            setTimeout(() => {
-              const el2 = findTag({
-                tagName: "input",
-                attributes: {
-                  "aria-label": "To recipients",
-                },
-              });
-              console.log("el2", el2);
-              if (el2.length > 0) {
-                window.focus();
-                (el2[0] as HTMLElement).focus();
-                (el2[0] as HTMLElement).click();
-                el2[0].dispatchEvent(new Event("input", { bubbles: true }));
-                el2[0].dispatchEvent(
-                  new PointerEvent("pointerdown", { bubbles: true })
-                );
-              }
-            }, 100);
-          },
-        },
-        {
-          type: "leaf",
-          name: "subject",
-          alternatives: [],
-          environment: "content-script",
-          action: async () => {
-            const el = findTag({
-              tagName: "input",
-              attributes: {
-                "aria-label": "Subject",
-              },
-            });
-            if (el.length > 0) {
-              window.focus();
-              (el[0] as HTMLElement).focus();
-              (el[0] as HTMLElement).click();
-            }
-          },
-        },
-        {
-          type: "leaf",
-          name: "body",
-          alternatives: ["message"],
-          environment: "content-script",
-          action: async () => {
-            const el = findTag({
-              tagName: "div",
-              attributes: {
-                "aria-label": "Message Body",
-              },
-            });
-            if (el.length > 0) {
-              window.focus();
-              (el[0] as HTMLElement).focus();
-              (el[0] as HTMLElement).click();
-            }
-          },
-        },
-      ],
-    },
-  ],
-};
-
-type LeafCommand = {
-  type: "leaf";
-  name: string;
-  alternatives: string[];
-  environment: "service-worker" | "content-script";
-  action: () => void;
-};
-
-type ParentCommand = {
-  type: "command";
-  name: string;
-  alternatives: string[];
-  subCommands: Command[];
-};
-type Command = LeafCommand | ParentCommand;
-
-type CommandGroup = {
-  type: "group";
-  name: string;
-  onlyOn?: string;
-  commands: Command[];
-};
-
-const allCommandGroups: CommandGroup[] = [
-  generalCommandGroup,
-  gmailCommandGroup,
+  // edit mode
+  "back|forward :number :moveType",
+  "select :number :moveType",
+  "copy|cut|paste",
+  "delete",
+  "delete :number :moveType",
+  "undo|redo",
+  "find|search",
+  "replace",
+  "select all",
+  "select none",
+  "stop|start writing|dictation",
 ];
 
-function matchesCommand(
-  command: string,
-  value: Command
-): { idx: number; leaf: LeafCommand | null } {
-  const words = command.toLowerCase().trim().split(" ");
-  // console.log("checking", command, value);
-  const q = [
-    {
-      idx: -1,
-      currCmd: value,
-    },
-  ];
+type TokenTypes = "command" | "number" | "moveType";
 
-  while (q.length > 0) {
-    const { idx: firstIdx, currCmd } = q.shift()!;
-    const currIdx = words.findIndex((word) =>
-      currCmd.alternatives
-        .concat([currCmd.name])
-        .some((alt) => word.includes(alt))
-    );
-    // console.log("currIdx", currIdx);
-    if (currIdx !== -1) {
-      if ("subCommands" in currCmd) {
-        for (const [key, subCmd] of Object.entries(currCmd.subCommands)) {
-          // console.log("pushing", subCmd);
-          q.push({ idx: firstIdx < 0 ? currIdx : firstIdx, currCmd: subCmd });
-        }
-      } else {
-        return { idx: firstIdx < 0 ? currIdx : firstIdx, leaf: currCmd };
-      }
-    }
+const commandTokens = ["back", "forward", "select"];
+
+const moveTypes = ["letter", "character", "word", "sentence", "paragraph"];
+
+export const isTokenType = (token: string, tokenType: TokenTypes) => {
+  if (tokenType === "command") {
+    return commandTokens.includes(token);
   }
+};
 
-  return { idx: -1, leaf: null };
+export const findNextCommand = (tokens: string[]) => {
+  const idx = tokens.findIndex((token) => commandTokens.includes(token));
+
+  if (idx === -1) {
+    return {
+      token: null,
+      rest: tokens,
+    };
+  } else {
+    return {
+      token: tokens[idx],
+      rest: tokens.slice(idx + 1),
+    };
+  }
+};
+
+const removePlural = (s: string) => {
+  if (s.endsWith("s")) {
+    return s.substring(0, s.length - 1);
+  }
+  return s;
+};
+
+export const findNextMoveType = (tokens: string[]) => {
+  const idx = tokens.findIndex((token) =>
+    moveTypes.includes(removePlural(token))
+  );
+  const found = removePlural(tokens[idx]);
+  if (idx === -1) {
+    return {
+      token: null,
+      rest: tokens,
+    };
+  } else {
+    return {
+      token: found === "letter" ? "character" : found,
+      rest: tokens.slice(idx + 1),
+    };
+  }
+};
+
+export const findNextNumber = (tokens: string[]) => {
+  const firstIdx = tokens
+    .map((t) => (t === "to" ? "two" : t))
+    .findIndex((token) => allNumberWords.includes(token));
+  const lastIdx = findLastIndex(tokens, (token) =>
+    allNumberWords.includes(token)
+  );
+  if (firstIdx === -1 || lastIdx === -1) {
+    return {
+      token: null,
+      rest: tokens,
+    };
+  } else {
+    return {
+      token: Number(
+        parseWordsToNumbers(tokens.slice(firstIdx, lastIdx + 1).join(" "))
+      ),
+      rest: tokens.slice(lastIdx + 1),
+    };
+  }
+};
+
+export const tokeniseCommand = (commandString: string) => {
+  const tokens = commandString
+    .replace(/\./g, " ")
+    .replace(/\,/g, " ")
+    .toLowerCase()
+    .trim()
+    .split(" ");
+  const command = findNextCommand(tokens);
+  if (command.token === "back" || command.token === "forward") {
+    const number = findNextNumber(command.rest);
+    const moveType = findNextMoveType(number.rest);
+    return {
+      command: command.token,
+      number: number.token,
+      moveType: moveType.token,
+    };
+  } else {
+    return {
+      command: command.token,
+    };
+  }
+};
+
+function moveCaret(start: number, end: number) {
+  const activeElement = document.activeElement as
+    | HTMLInputElement
+    | HTMLTextAreaElement;
+  if (activeElement != null && activeElement.selectionStart != null) {
+    activeElement.selectionStart = start;
+    activeElement.selectionEnd = end;
+  }
 }
 
-export async function findCommand(
-  transcript: string,
-  currentUrl?: string | undefined
-): Promise<LeafCommand | null> {
-  let possibleCommandGroups = [];
-  if (currentUrl != null) {
-    for (const [key, value] of Object.entries(allCommandGroups)) {
-      if ("onlyOn" in value && currentUrl.includes(value.onlyOn!)) {
-        possibleCommandGroups.push(value);
-      }
-    }
+const getCurrentTextData = () => {
+  const activeElement = document.activeElement as
+    | HTMLInputElement
+    | HTMLTextAreaElement;
+  if (activeElement != null && activeElement.selectionStart != null) {
+    return {
+      text: activeElement.value,
+      start: activeElement.selectionStart,
+      end: activeElement.selectionEnd,
+    };
   }
-  for (const [key, value] of Object.entries(allCommandGroups)) {
-    if (!("onlyOn" in value)) {
-      possibleCommandGroups.push(value);
-    }
+  return {
+    text: null,
+    start: null,
+    end: null,
+  };
+};
+
+const isSpace = (s: string) => {
+  return [" ", "\n", "\t"].includes(s[0]);
+};
+
+export const snapIndex = (text: string, idx: number) => {
+  if (idx < 0) {
+    return 0;
+  } else if (idx >= text.length) {
+    return text.length - 1;
+  } else {
+    return idx;
   }
-  console.log("possibleCommandGroups", possibleCommandGroups);
-  let found = null;
-  for (const group of possibleCommandGroups) {
-    for (const command of group.commands) {
-      const { idx, leaf } = matchesCommand(transcript, command);
-      if (idx !== -1) {
-        found = leaf;
-        console.log("found", found, idx);
-        break;
-      }
-    }
-  }
-  return found;
+};
+function reverseString(str: string) {
+  // Step 1. Use the split() method to return a new array
+  var splitString = str.split(""); // var splitString = "hello".split("");
+  // ["h", "e", "l", "l", "o"]
+
+  // Step 2. Use the reverse() method to reverse the new created array
+  var reverseArray = splitString.reverse(); // var reverseArray = ["h", "e", "l", "l", "o"].reverse();
+  // ["o", "l", "l", "e", "h"]
+
+  // Step 3. Use the join() method to join all elements of the array into a string
+  var joinArray = reverseArray.join(""); // var joinArray = ["o", "l", "l", "e", "h"].join("");
+  // "olleh"
+
+  //Step 4. Return the reversed string
+  return joinArray; // "olleh"
 }
+export const executeCommand = (commandString: string) => {
+  const command = tokeniseCommand(commandString);
+  console.log("command", command);
+
+  if (command.command === "back" || command.command === "forward") {
+    const unit = command.command === "forward" ? 1 : -1;
+    const { text: originalText, start, end } = getCurrentTextData();
+    if (
+      command.number != null &&
+      command.moveType != null &&
+      originalText != null
+    ) {
+      switch (command.moveType) {
+        case "character":
+          const newPosition = start + unit * command.number;
+          moveCaret(newPosition, newPosition);
+          break;
+        case "word":
+          let text =
+            command.command === "back"
+              ? reverseString(originalText)
+              : originalText;
+
+          let currIdx =
+            command.command === "back" ? text.length - start : start;
+
+          while (true) {
+            if (
+              currIdx === 0 ||
+              (isSpace(text[currIdx - 1]) && !isSpace(text[currIdx]))
+            ) {
+              break;
+            }
+            currIdx -= 1;
+          }
+
+          const offset =
+            command.command === "back" &&
+            !isSpace(originalText[start]) &&
+            !isSpace(originalText[start - 1])
+              ? -1
+              : 0;
+
+          for (let i = 0; i < command.number + offset; i++) {
+            while (text[currIdx] != null && !isSpace(text[currIdx])) {
+              currIdx += 1;
+            }
+            while (text[currIdx] != null && isSpace(text[currIdx])) {
+              currIdx += 1;
+            }
+          }
+
+          if (command.command === "back") {
+            while (text[currIdx] != null && !isSpace(text[currIdx])) {
+              currIdx += 1;
+            }
+            text = reverseString(text);
+            currIdx = text.length - currIdx;
+          }
+
+          currIdx = snapIndex(text, currIdx);
+          moveCaret(currIdx, currIdx);
+          break;
+        case "sentence":
+          break;
+        case "paragraph":
+          break;
+      }
+    }
+  }
+};
