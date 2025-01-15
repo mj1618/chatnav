@@ -1,5 +1,5 @@
 import wordsToNumbers from "words-to-numbers";
-import { activeTab } from "./utils";
+import { activeTab } from "../src/utils";
 
 const grammar = [
   "stop|start :microphone",

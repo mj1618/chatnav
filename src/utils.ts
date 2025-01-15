@@ -226,7 +226,7 @@ export const twentyToNinety = [
 
 export const hundredToThousand = ["hundred", "thousand"];
 
-const homophones = ["to", "too"];
+export const homophones = ["to", "too"];
 
 export const allNumberWords = oneToTwenty
   .concat(twentyToNinety)
@@ -256,3 +256,105 @@ export function findLastIndex<T>(
   }
   return -1;
 }
+
+export function moveCaret(start: number, end: number) {
+  const activeElement = document.activeElement as
+    | HTMLInputElement
+    | HTMLTextAreaElement;
+  if (activeElement != null && activeElement.selectionStart != null) {
+    activeElement.selectionStart = start;
+    activeElement.selectionEnd = end;
+  }
+}
+
+export const getCurrentTextData = () => {
+  const activeElement = document.activeElement as
+    | HTMLInputElement
+    | HTMLTextAreaElement;
+  if (activeElement != null && activeElement.selectionStart != null) {
+    return {
+      text: activeElement.value,
+      start: activeElement.selectionStart,
+      end: activeElement.selectionEnd,
+    };
+  }
+  return {
+    text: null,
+    start: null,
+    end: null,
+  };
+};
+
+export const isSpace = (s: string) => {
+  return [" ", "\n", "\t"].includes(s[0]);
+};
+
+export const snapIndex = (text: string, idx: number) => {
+  if (idx < 0) {
+    return 0;
+  } else if (idx >= text.length) {
+    return text.length - 1;
+  } else {
+    return idx;
+  }
+};
+export function reverseString(str: string) {
+  // Step 1. Use the split() method to return a new array
+  var splitString = str.split(""); // var splitString = "hello".split("");
+  // ["h", "e", "l", "l", "o"]
+
+  // Step 2. Use the reverse() method to reverse the new created array
+  var reverseArray = splitString.reverse(); // var reverseArray = ["h", "e", "l", "l", "o"].reverse();
+  // ["o", "l", "l", "e", "h"]
+
+  // Step 3. Use the join() method to join all elements of the array into a string
+  var joinArray = reverseArray.join(""); // var joinArray = ["o", "l", "l", "e", "h"].join("");
+  // "olleh"
+
+  //Step 4. Return the reversed string
+  return joinArray; // "olleh"
+}
+
+export const findNextCommand = <T>(
+  tokens: string[],
+  commandWords: T[]
+): {
+  token: T | null;
+  rest: string[];
+} => {
+  const idx = tokens.findIndex((token) => commandWords.includes(token as T));
+
+  if (idx === -1) {
+    return {
+      token: null,
+      rest: tokens,
+    };
+  } else {
+    return {
+      token: tokens[idx] as T,
+      rest: tokens.slice(idx + 1),
+    };
+  }
+};
+
+export const findNextLiteral = <T>(
+  tokens: string[],
+  commandWords: T[]
+): {
+  token: T | null;
+  rest: string[];
+} => {
+  const idx = tokens.findIndex((token) => commandWords.includes(token as T));
+
+  if (idx === -1) {
+    return {
+      token: null,
+      rest: tokens,
+    };
+  } else {
+    return {
+      token: commandWords[0] as T,
+      rest: tokens.slice(idx + 1),
+    };
+  }
+};

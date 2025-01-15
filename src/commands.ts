@@ -1,53 +1,98 @@
-import { allNumberWords, findLastIndex, parseWordsToNumbers } from "./utils";
+import { clickOn, hideTags, showTags } from "./commands-dom";
+import { goBackOrForward, MoveType } from "./commands-editor";
+import {
+  allNumberWords,
+  findLastIndex,
+  findNextLiteral,
+  parseWordsToNumbers,
+} from "./utils";
 
-const grammar = [
-  "stop|start :microphone",
+const generalGrammar = [
+  "stop mic|microphone|recording",
+  "start mic|microphone|recording",
   "navigate|go|open back|forward|tab|window|gmail",
   "navigate|go|open url :site",
   "compose|write email",
-  "stop|start writing|dictation",
+  "start writing|dictation",
+  "show tag|tags|tax for :term",
+  "show tag|tags|tax",
+  "hide|high tag|tags|tax",
+  "click on| @number",
+  "click on| :term",
+];
 
+const editorGrammar = [
   // edit mode
-  "back|forward :number :moveType",
-  "select :number :moveType",
-  "copy|cut|paste",
+  "back @number @moveType",
+  "forward @number @moveType",
+  "select @number @moveType",
+  "copy",
+  "cut",
+  "paste",
   "delete",
-  "delete :number :moveType",
-  "undo|redo",
+  "delete @number @moveType",
+  "undo",
+  "redo",
   "find|search",
+  "next",
   "replace",
   "select all",
   "select none",
-  "stop|start writing|dictation",
+  "stop writing|dictation",
 ];
 
-type TokenTypes = "command" | "number" | "moveType";
+type ExpressionElement =
+  | {
+      type: "variable";
+      name: string;
+    }
+  | {
+      type: "number";
+    }
+  | {
+      type: "moveType";
+    }
+  | {
+      type: "literals";
+      literals: string[];
+    };
 
-const commandTokens = ["back", "forward", "select"];
+type Expression = ExpressionElement[];
+
+export const parseGrammar = (grammar: string[]): Expression[] => {
+  let expressions: Expression[] = [];
+  for (const line of grammar) {
+    const tokens = line.split(" ");
+    let exp = [];
+    for (const token of tokens) {
+      if (token.startsWith(":")) {
+        if (token.slice(1) == null) {
+          throw new Error("could not parse variable " + token);
+        }
+        exp.push({
+          type: "variable",
+          name: token.slice(1) as string,
+        } as ExpressionElement);
+      } else if (token.startsWith("@")) {
+        if (!["number", "moveType"].includes(token.slice(1))) {
+          throw new Error("could not parse token " + token);
+        }
+        exp.push({
+          type: token.slice(1) as "number" | "moveType",
+        } as ExpressionElement);
+      } else {
+        exp.push({
+          type: "literals",
+          literals: token.split("|") as string[],
+        } as ExpressionElement);
+      }
+    }
+    expressions.push(exp);
+  }
+  return expressions;
+};
 
 const moveTypes = ["letter", "character", "word", "sentence", "paragraph"];
-
-export const isTokenType = (token: string, tokenType: TokenTypes) => {
-  if (tokenType === "command") {
-    return commandTokens.includes(token);
-  }
-};
-
-export const findNextCommand = (tokens: string[]) => {
-  const idx = tokens.findIndex((token) => commandTokens.includes(token));
-
-  if (idx === -1) {
-    return {
-      token: null,
-      rest: tokens,
-    };
-  } else {
-    return {
-      token: tokens[idx],
-      rest: tokens.slice(idx + 1),
-    };
-  }
-};
 
 const removePlural = (s: string) => {
   if (s.endsWith("s")) {
@@ -68,7 +113,10 @@ export const findNextMoveType = (tokens: string[]) => {
     };
   } else {
     return {
-      token: found === "letter" ? "character" : found,
+      token:
+        found === "letter"
+          ? "character"
+          : (found as "character" | "word" | "sentence" | "paragraph"),
       rest: tokens.slice(idx + 1),
     };
   }
@@ -96,154 +144,202 @@ export const findNextNumber = (tokens: string[]) => {
   }
 };
 
-export const tokeniseCommand = (commandString: string) => {
-  const tokens = commandString
-    .replace(/\./g, " ")
-    .replace(/\,/g, " ")
+type ParsedToken =
+  | {
+      type: "variable";
+      name: string;
+      value: string;
+    }
+  | {
+      type: "number";
+      value: number;
+    }
+  | {
+      type: "moveType";
+      value: "character" | "word" | "sentence" | "paragraph";
+    }
+  | {
+      type: "literal";
+      value: string;
+    };
+
+const tokeniseCommand = (
+  str: string,
+  grammarStrings: string[]
+): { result: ParsedToken[] | null; rest: string[] } => {
+  const tokens = str
+    .replace(/\./g, "")
+    .replace(/\,/g, "")
     .toLowerCase()
     .trim()
     .split(" ");
-  const command = findNextCommand(tokens);
-  if (command.token === "back" || command.token === "forward") {
-    const number = findNextNumber(command.rest);
-    const moveType = findNextMoveType(number.rest);
-    return {
-      command: command.token,
-      number: number.token,
-      moveType: moveType.token,
-    };
-  } else {
-    return {
-      command: command.token,
-    };
-  }
-};
+  const grammar = parseGrammar(grammarStrings);
+  for (const expression of grammar) {
+    let result: ParsedToken[] = [];
+    let success = true;
+    let rest = [...tokens];
+    // console.log(grammar);
+    for (const part of expression) {
+      switch (part.type) {
+        case "variable":
+          result.push({
+            type: "variable",
+            name: part.name,
+            value: rest.join(" "),
+          } as ParsedToken);
+          rest = [];
+          break;
 
-function moveCaret(start: number, end: number) {
-  const activeElement = document.activeElement as
-    | HTMLInputElement
-    | HTMLTextAreaElement;
-  if (activeElement != null && activeElement.selectionStart != null) {
-    activeElement.selectionStart = start;
-    activeElement.selectionEnd = end;
-  }
-}
+        case "number":
+          const numberResult = findNextNumber(rest);
+          if (numberResult.token != null) {
+            result.push({
+              type: "number",
+              value: numberResult.token,
+            } as ParsedToken);
+            rest = numberResult.rest;
+          } else {
+            success = false;
+          }
+          break;
 
-const getCurrentTextData = () => {
-  const activeElement = document.activeElement as
-    | HTMLInputElement
-    | HTMLTextAreaElement;
-  if (activeElement != null && activeElement.selectionStart != null) {
-    return {
-      text: activeElement.value,
-      start: activeElement.selectionStart,
-      end: activeElement.selectionEnd,
-    };
+        case "moveType":
+          const moveTypeResult = findNextMoveType(rest);
+          if (moveTypeResult.token != null) {
+            result.push({
+              type: "moveType",
+              value: moveTypeResult.token,
+            } as ParsedToken);
+            rest = moveTypeResult.rest;
+          } else {
+            success = false;
+          }
+          break;
+        case "literals":
+          const literalResult = findNextLiteral(rest, part.literals);
+          if (literalResult.token != null) {
+            result.push({
+              type: "literal",
+              value: literalResult.token,
+            } as ParsedToken);
+            rest = literalResult.rest;
+          } else if (part.literals.some((l) => l.length === 0)) {
+            result.push({
+              type: "literal",
+              value: part.literals[0],
+            } as ParsedToken);
+            rest = literalResult.rest;
+          } else {
+            success = false;
+          }
+      }
+      if (success === false) {
+        break;
+      }
+    }
+    if (success) {
+      return {
+        result,
+        rest,
+      };
+    }
   }
   return {
-    text: null,
-    start: null,
-    end: null,
+    result: null,
+    rest: tokens,
   };
 };
 
-const isSpace = (s: string) => {
-  return [" ", "\n", "\t"].includes(s[0]);
-};
-
-export const snapIndex = (text: string, idx: number) => {
-  if (idx < 0) {
-    return 0;
-  } else if (idx >= text.length) {
-    return text.length - 1;
-  } else {
-    return idx;
+const matchesToken = (tok1: ParsedToken, tok2: ParsedToken) => {
+  if (
+    tok1.type === "variable" &&
+    tok1.type === tok2.type &&
+    tok1.value === tok2.value &&
+    tok1.name === tok2.name
+  ) {
+    return true;
+  } else if (tok1.type === tok2.type && tok1.value === tok2.value) {
+    return true;
   }
+  return false;
 };
-function reverseString(str: string) {
-  // Step 1. Use the split() method to return a new array
-  var splitString = str.split(""); // var splitString = "hello".split("");
-  // ["h", "e", "l", "l", "o"]
 
-  // Step 2. Use the reverse() method to reverse the new created array
-  var reverseArray = splitString.reverse(); // var reverseArray = ["h", "e", "l", "l", "o"].reverse();
-  // ["o", "l", "l", "e", "h"]
-
-  // Step 3. Use the join() method to join all elements of the array into a string
-  var joinArray = reverseArray.join(""); // var joinArray = ["o", "l", "l", "e", "h"].join("");
-  // "olleh"
-
-  //Step 4. Return the reversed string
-  return joinArray; // "olleh"
-}
-export const executeCommand = (commandString: string) => {
-  const command = tokeniseCommand(commandString);
-  console.log("command", command);
-
-  if (command.command === "back" || command.command === "forward") {
-    const unit = command.command === "forward" ? 1 : -1;
-    const { text: originalText, start, end } = getCurrentTextData();
-    if (
-      command.number != null &&
-      command.moveType != null &&
-      originalText != null
-    ) {
-      switch (command.moveType) {
-        case "character":
-          const newPosition = start + unit * command.number;
-          moveCaret(newPosition, newPosition);
-          break;
-        case "word":
-          let text =
-            command.command === "back"
-              ? reverseString(originalText)
-              : originalText;
-
-          let currIdx =
-            command.command === "back" ? text.length - start : start;
-
-          while (true) {
-            if (
-              currIdx === 0 ||
-              (isSpace(text[currIdx - 1]) && !isSpace(text[currIdx]))
-            ) {
-              break;
-            }
-            currIdx -= 1;
-          }
-
-          const offset =
-            command.command === "back" &&
-            !isSpace(originalText[start]) &&
-            !isSpace(originalText[start - 1])
-              ? -1
-              : 0;
-
-          for (let i = 0; i < command.number + offset; i++) {
-            while (text[currIdx] != null && !isSpace(text[currIdx])) {
-              currIdx += 1;
-            }
-            while (text[currIdx] != null && isSpace(text[currIdx])) {
-              currIdx += 1;
-            }
-          }
-
-          if (command.command === "back") {
-            while (text[currIdx] != null && !isSpace(text[currIdx])) {
-              currIdx += 1;
-            }
-            text = reverseString(text);
-            currIdx = text.length - currIdx;
-          }
-
-          currIdx = snapIndex(text, currIdx);
-          moveCaret(currIdx, currIdx);
-          break;
-        case "sentence":
-          break;
-        case "paragraph":
-          break;
-      }
+const executeExpression = (expression: ParsedToken[]) => {
+  if (
+    (expression.length === 2 &&
+      matchesToken(expression[0], { type: "literal", value: "start" })) ||
+    matchesToken(expression[0], { type: "literal", value: "stop" })
+  ) {
+    if (matchesToken(expression[1], { type: "literal", value: "mic" })) {
+      chrome.runtime.sendMessage({
+        type: `${expression[0].value}-mic`,
+      });
+      return true;
     }
+  } else if (
+    (expression.length === 2 &&
+      matchesToken(expression[0], { type: "literal", value: "back" })) ||
+    matchesToken(expression[0], { type: "literal", value: "forward" })
+  ) {
+    goBackOrForward(
+      expression[0].value as "back" | "forward",
+      expression[1].value as number,
+      expression[2].value as MoveType
+    );
+    return true;
+  } else if (
+    expression.length >= 2 &&
+    matchesToken(expression[0], { type: "literal", value: "hide" }) &&
+    matchesToken(expression[1], { type: "literal", value: "tag" })
+  ) {
+    hideTags();
+    return true;
+  } else if (
+    expression.length === 4 &&
+    matchesToken(expression[0], { type: "literal", value: "show" }) &&
+    matchesToken(expression[1], { type: "literal", value: "tag" }) &&
+    matchesToken(expression[2], { type: "literal", value: "for" }) &&
+    expression[3].type === "variable"
+  ) {
+    showTags(expression[3].value);
+    return true;
+  } else if (
+    expression.length === 2 &&
+    matchesToken(expression[0], { type: "literal", value: "show" }) &&
+    matchesToken(expression[1], { type: "literal", value: "tag" })
+  ) {
+    showTags();
+    return true;
+  } else if (
+    expression.length === 3 &&
+    matchesToken(expression[0], { type: "literal", value: "click" }) &&
+    matchesToken(expression[1], { type: "literal", value: "on" })
+  ) {
+    if (expression[2].type === "number") {
+      if (window.currentSearchTerm != null) {
+        clickOn(window.currentSearchTerm, expression[2].value);
+      } else {
+        clickOn("", expression[2].value);
+      }
+    } else {
+      clickOn(expression[2].value as string);
+    }
+    return true;
   }
+};
+
+export const executeCommand = (commandString: string) => {
+  console.log("executing command", commandString);
+  const { result: expression, rest } = tokeniseCommand(
+    commandString,
+    generalGrammar.concat(editorGrammar)
+  );
+
+  console.log("found expression", expression);
+
+  if (expression != null) {
+    return executeExpression(expression);
+  }
+
+  return false;
 };
