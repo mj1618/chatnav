@@ -1,4 +1,4 @@
-import { clickOn, hideTags, showTags } from "./commands-dom";
+import { clickOn, hideTags, showTags, writeText } from "./commands-dom";
 import { goBackOrForward, MoveType } from "./commands-editor";
 import {
   allNumberWords,
@@ -266,16 +266,15 @@ const matchesToken = (tok1: ParsedToken, tok2: ParsedToken) => {
 
 const executeExpression = (expression: ParsedToken[]) => {
   if (
-    (expression.length === 2 &&
+    ((expression.length === 2 &&
       matchesToken(expression[0], { type: "literal", value: "start" })) ||
-    matchesToken(expression[0], { type: "literal", value: "stop" })
+      matchesToken(expression[0], { type: "literal", value: "stop" })) &&
+    matchesToken(expression[1], { type: "literal", value: "mic" })
   ) {
-    if (matchesToken(expression[1], { type: "literal", value: "mic" })) {
-      chrome.runtime.sendMessage({
-        type: `${expression[0].value}-mic`,
-      });
-      return true;
-    }
+    chrome.runtime.sendMessage({
+      type: `${expression[0].value}-mic`,
+    });
+    return true;
   } else if (
     (expression.length === 2 &&
       matchesToken(expression[0], { type: "literal", value: "back" })) ||
@@ -316,6 +315,7 @@ const executeExpression = (expression: ParsedToken[]) => {
     matchesToken(expression[1], { type: "literal", value: "on" })
   ) {
     if (expression[2].type === "number") {
+      console.log("checking current", window.currentSearchTerm);
       if (window.currentSearchTerm != null) {
         clickOn(window.currentSearchTerm, expression[2].value);
       } else {
@@ -325,21 +325,40 @@ const executeExpression = (expression: ParsedToken[]) => {
       clickOn(expression[2].value as string);
     }
     return true;
+  } else if (
+    expression.length === 2 &&
+    (matchesToken(expression[0], { type: "literal", value: "start" }) ||
+      matchesToken(expression[0], { type: "literal", value: "stop" })) &&
+    matchesToken(expression[1], { type: "literal", value: "writing" })
+  ) {
+    console.log(`sending message ${expression[0].value}-writing`);
+    chrome.runtime.sendMessage({
+      type: `${expression[0].value}-writing`,
+    });
+    return true;
   }
 };
 
-export const executeCommand = (commandString: string) => {
-  console.log("executing command", commandString);
-  const { result: expression, rest } = tokeniseCommand(
-    commandString,
-    generalGrammar.concat(editorGrammar)
-  );
+export const executeCommand = (commandString: string, isWriting: boolean) => {
+  console.log("executing command", commandString, isWriting);
 
-  console.log("found expression", expression);
+  if (
+    isWriting &&
+    !["stop writing", "stop righting"].some((x) => commandString.includes(x))
+  ) {
+    writeText(commandString);
+  } else {
+    const { result: expression, rest } = tokeniseCommand(
+      commandString,
+      generalGrammar.concat(editorGrammar)
+    );
 
-  if (expression != null) {
-    return executeExpression(expression);
+    console.log("found expression", expression);
+
+    if (expression != null) {
+      return executeExpression(expression);
+    }
+
+    return false;
   }
-
-  return false;
 };

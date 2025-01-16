@@ -56,10 +56,13 @@ export async function createRecordTab() {
 }
 
 export async function sendTabMessage(
-  tabId: number,
+  tabId: number | undefined,
   type: string,
-  message: string
+  message?: string | undefined
 ) {
+  if (tabId == null) {
+    return;
+  }
   console.log("sendTabMessage", tabId, type, message);
   try {
     await chrome.scripting.executeScript({

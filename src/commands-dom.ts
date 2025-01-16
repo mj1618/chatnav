@@ -4,6 +4,8 @@ declare global {
     container?: HTMLDivElement;
     tagsContainer?: HTMLDivElement;
     currentSearchTerm?: string;
+    isWritingClient?: boolean;
+    text?: string;
   }
 }
 
@@ -108,6 +110,7 @@ export function hideTags() {
     document.body.removeChild(window.tagsContainer);
     window.tagsContainer = undefined;
   }
+  window.currentSearchTerm = undefined;
 }
 
 function getLabel(x: Element) {
@@ -152,7 +155,16 @@ function createTag(
   shadow.appendChild(elem);
 }
 
+function clickOnElement(tag: HTMLElement) {
+  tag.focus();
+  tag.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+  tag.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  tag.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+  // tag.click()
+}
+
 export function clickOn(searchTerm: string, offset?: number) {
+  console.log("clickOn", searchTerm, offset);
   if (typeof window === "undefined") {
     console.log("not in browser for show tags");
     return;
@@ -160,17 +172,20 @@ export function clickOn(searchTerm: string, offset?: number) {
   hideTags();
   const tags = getTagsFor(searchTerm);
   if (tags.length === 1) {
-    (tags[0].tag as HTMLElement).focus();
-    (tags[0].tag as HTMLElement).click();
-  } else if (offset != null) {
+    console.log("found tag", tags[0]);
+    clickOnElement(tags[0].tag as HTMLElement);
+  } else if (offset != null && offset - 1 < tags.length) {
+    console.log("clicking on tags offset", tags, offset);
+    clickOnElement(tags[offset - 1].tag as HTMLElement);
   } else {
+    console.log("found multiple tags", tags, offset);
     showTags(searchTerm);
   }
 }
 
 export function getTagsFor(searchTerm?: string) {
   let found: { label: string; tag: Element }[] = [];
-  console.log("get tags");
+  console.log("get tags", searchTerm);
   let seenNames: { [key: string]: number } = {};
 
   for (const tag of document.getElementsByTagName("*")) {
@@ -185,10 +200,10 @@ export function getTagsFor(searchTerm?: string) {
           .toLowerCase()
           .includes(searchTerm.toLowerCase().trim())
       ) {
-        console.log("doesn't match", getLabel(tag), searchTerm);
+        // console.log("doesn't match", getLabel(tag), searchTerm);
         continue;
       } else {
-        console.log("match!", tag);
+        // console.log("match!", tag);
       }
       const rect = tag.getBoundingClientRect();
       // @ts-ignore
@@ -216,7 +231,9 @@ export function showTags(searchTerm?: string) {
   }
   hideTags();
 
-  console.log("show tags");
+  window.currentSearchTerm = searchTerm;
+
+  console.log("show tags", searchTerm);
   window.tagsContainer = document.createElement("div");
   document.body.appendChild(window.tagsContainer);
   const shadow = window.tagsContainer.attachShadow({ mode: "open" });
@@ -234,4 +251,105 @@ export function showTags(searchTerm?: string) {
       );
     }
   }
+}
+
+export function startWriting() {
+  if (typeof window === "undefined") {
+    console.log("not in browser for show tags");
+    return;
+  }
+  console.log("writing started");
+  window.isWritingClient = true;
+  window.text =
+    (document.activeElement as any | null)?.value != null
+      ? (document.activeElement as any | null).value
+      : (document.activeElement as any | null)?.innerText;
+  window.text = (window.text + " ").trim();
+}
+
+export function stopWriting() {
+  if (typeof window === "undefined") {
+    console.log("not in browser for show tags");
+    return;
+  }
+  console.log("writing stopped");
+  window.isWritingClient = false;
+  window.text = "";
+}
+
+export function writeToInputElement(
+  element: HTMLInputElement | HTMLTextAreaElement,
+  text: string
+) {
+  try {
+    const keyboardEventInit = {
+      bubbles: false,
+      cancelable: false,
+      composed: false,
+      key: "",
+      code: "",
+      location: 0,
+    };
+
+    if (element) {
+      element.innerText = text;
+      element.dispatchEvent(new KeyboardEvent("keydown", keyboardEventInit));
+      //@ts-ignore
+      element.dispatchEvent(new KeyboardEvent("keyup", keyboardEventInit));
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  } catch (e) {}
+}
+
+export function writeText(text: string) {
+  if (typeof window === "undefined") {
+    console.log("not in browser for show tags");
+    return;
+  }
+
+  if (document.activeElement == null) {
+    console.error("no active element to write to");
+    chrome.runtime.sendMessage({
+      type: "stop-writing",
+    });
+    return;
+  }
+
+  // if (
+  //   ["input", "textarea"].includes(document.activeElement.nodeName)
+  // ) {
+  //   writeToInputElement(document.activeElement as HTMLInputElement, text);
+  // } else {
+  //   document.execCommand(document.activeElement, true, text);
+  // }
+  console.log("insertText", text);
+  window.text += text;
+  document.execCommand("selectAll", false);
+  document.execCommand("insertText", false, window.text);
+}
+
+export function writeInterimText(text: string) {
+  if (typeof window === "undefined") {
+    console.log("not in browser for show tags");
+    return;
+  }
+
+  if (document.activeElement == null) {
+    console.error("no active element to write to");
+    chrome.runtime.sendMessage({
+      type: "stop-writing",
+    });
+    return;
+  }
+
+  // if (
+  //   ["input", "textarea"].includes(document.activeElement.nodeName)
+  // ) {
+  //   writeToInputElement(document.activeElement as HTMLInputElement, text);
+  // } else {
+  //   document.execCommand(document.activeElement, true, text);
+  // }
+  console.log("insertText", text);
+  document.execCommand("selectAll", false);
+  document.execCommand("insertText", false, window.text + text);
 }

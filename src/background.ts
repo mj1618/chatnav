@@ -1,3 +1,4 @@
+import { executeCommand } from "./commands";
 import {
   activeTab,
   createRecordTab,
@@ -14,6 +15,7 @@ const MicModes = {
 };
 
 const MicMode = MicModes.browser;
+let isWritingServer = false;
 
 chrome.runtime.onMessage.addListener(async function (
   message,
@@ -61,6 +63,8 @@ chrome.runtime.onMessage.addListener(async function (
       });
       sendTabMessage(tab.id!, "speech-final", message.message);
     }
+
+    executeCommand(message.message, isWritingServer);
     // const cmd = await findCommand(message.message, tab?.url);
     // if (cmd != null && cmd.environment === "service-worker") {
     //   cmd.action();
@@ -87,6 +91,12 @@ chrome.runtime.onMessage.addListener(async function (
       },
     });
     await stopAllRecordTabs();
+  } else if (message.type === "start-writing") {
+    isWritingServer = true;
+    sendTabMessage((await activeTab())?.id, "start-writing");
+  } else if (message.type === "stop-writing") {
+    isWritingServer = false;
+    sendTabMessage((await activeTab())?.id, "stop-writing");
   }
 });
 
