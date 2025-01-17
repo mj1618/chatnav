@@ -262,6 +262,8 @@ export const startWriting = ifFrontend(() => {
 export const stopWriting = ifFrontend(() => {
   console.log("writing stopped");
   window.inputMode = "general";
+  document.execCommand("selectAll", false);
+  document.execCommand("insertText", false, window.text);
   window.text = "";
 });
 
@@ -290,43 +292,36 @@ export function writeToInputElement(
 }
 
 export const writeText = ifFrontend((text: string) => {
-  if (document.activeElement == null) {
-    console.error("no active element to write to");
-    chrome.runtime.sendMessage({
-      type: "stop-writing",
-    });
+  text = window.text + " " + text + " ";
+  text = text.replace(" comma ", ", ");
+  text = text.replace(" period ", ". ");
+  text = text.replace(" full stop ", ". ");
+  text = text.replace(" question mark ", "? ");
+  text = text.replace(" semicolon ", "; ");
+  text = text.replace(" semi-colon ", "; ");
+  text = text.replace(" semi colon ", "; ");
+  text = text.replace(" colon ", ": ");
+  text = text.trim();
+
+  for (let i = 2; i < text.length; i++) {
+    if ([".", "?"].includes(text.charAt(i - 2))) {
+      text =
+        text.slice(0, i) + text.charAt(i).toUpperCase() + text.slice(i + 1);
+    }
+  }
+
+  console.log("insertText", text);
+  if (text.length === 0) {
     return;
   }
 
-  // if (
-  //   ["input", "textarea"].includes(document.activeElement.nodeName)
-  // ) {
-  //   writeToInputElement(document.activeElement as HTMLInputElement, text);
-  // } else {
-  //   document.execCommand(document.activeElement, true, text);
-  // }
-  console.log("insertText", text);
-  window.text += text;
+  window.text = text.trim();
+  window.text = window.text!.charAt(0).toUpperCase() + window.text!.slice(1);
   document.execCommand("selectAll", false);
   document.execCommand("insertText", false, window.text);
 });
 
 export const writeInterimText = ifFrontend((text: string) => {
-  if (document.activeElement == null) {
-    console.error("no active element to write to");
-    chrome.runtime.sendMessage({
-      type: "stop-writing",
-    });
-    return;
-  }
-
-  // if (
-  //   ["input", "textarea"].includes(document.activeElement.nodeName)
-  // ) {
-  //   writeToInputElement(document.activeElement as HTMLInputElement, text);
-  // } else {
-  //   document.execCommand(document.activeElement, true, text);
-  // }
   console.log("insertText", text);
   document.execCommand("selectAll", false);
   document.execCommand("insertText", false, window.text + text);

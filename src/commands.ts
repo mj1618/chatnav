@@ -13,12 +13,12 @@ export const generalGrammar = [
   "navigate|go|open back||forward||tab||window||gmail",
   "navigate|go|open url :site",
   "compose|write email",
-  "start writing|dictation",
+  "start writing|dictation|typing",
   "show tag|tags|tax for :term",
   "show tag|tags|tax",
   "hide|high tag|tags|tax",
-  "click on| @number",
-  "click on| :term",
+  "click on| number| @number",
+  "click on| the| :term",
 ];
 
 export const editorGrammar = [
@@ -143,7 +143,18 @@ export const findNextMoveType = (tokens: string[]) => {
 export const findNextNumber = (tokens: string[]) => {
   const firstIdx = tokens
     .map((t) => (t === "to" ? "two" : t))
+    .map((t) => (t === "too" ? "two" : t))
     .findIndex((token) => allNumberWords.includes(token));
+
+  for (const token of tokens) {
+    if (!Number.isNaN(token)) {
+      return {
+        token: Number(token),
+        rest: tokens.slice(tokens.indexOf(token)),
+      };
+    }
+  }
+
   const lastIdx = findLastIndex(tokens, (token) =>
     allNumberWords.includes(token)
   );
@@ -330,19 +341,19 @@ const executeExpression = (expression: ParsedToken[]) => {
     showTags();
     return true;
   } else if (
-    expression.length === 3 &&
+    expression.length === 4 &&
     matchesToken(expression[0], { type: "literal", value: "click" }) &&
     matchesToken(expression[1], { type: "literal", value: "on" })
   ) {
-    if (expression[2].type === "number") {
+    if (expression[3].type === "number") {
       console.log("checking current", window.currentSearchTerm);
       if (window.currentSearchTerm != null) {
-        clickOn(window.currentSearchTerm, expression[2].value);
+        clickOn(window.currentSearchTerm, expression[3].value);
       } else {
-        clickOn("", expression[2].value);
+        clickOn("", expression[3].value);
       }
     } else {
-      clickOn(expression[2].value as string);
+      clickOn(expression[3].value as string);
     }
     return true;
   } else if (
