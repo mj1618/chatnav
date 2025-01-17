@@ -1,3 +1,4 @@
+import { createNewTab, goToUrl } from "./commands-backend";
 import { clickOn, hideTags, showTags, writeText } from "./commands-dom";
 import { goBackOrForward, MoveType } from "./commands-editor";
 import {
@@ -7,10 +8,9 @@ import {
   parseWordsToNumbers,
 } from "./utils";
 
-const generalGrammar = [
-  "stop mic|microphone|recording",
-  "start mic|microphone|recording",
-  "navigate|go|open back|forward|tab|window|gmail",
+export const generalGrammar = [
+  "start||stop mic|microphone|recording",
+  "navigate|go|open back||forward||tab||window||gmail",
   "navigate|go|open url :site",
   "compose|write email",
   "start writing|dictation",
@@ -21,7 +21,7 @@ const generalGrammar = [
   "click on| :term",
 ];
 
-const editorGrammar = [
+export const editorGrammar = [
   // edit mode
   "back @number @moveType",
   "forward @number @moveType",
@@ -63,13 +63,16 @@ export const parseGrammar = (grammar: string[]): Expression[] => {
   let expressions: Expression[] = [];
   for (const line of grammar) {
     const tokens = line.split(" ");
-    let exp = [];
+    let exps: ExpressionElement[][] = [[]];
+    const push = (e: ExpressionElement) => {
+      exps = exps.map((exp) => exp.concat([e]));
+    };
     for (const token of tokens) {
       if (token.startsWith(":")) {
         if (token.slice(1) == null) {
           throw new Error("could not parse variable " + token);
         }
-        exp.push({
+        push({
           type: "variable",
           name: token.slice(1) as string,
         } as ExpressionElement);
@@ -77,17 +80,32 @@ export const parseGrammar = (grammar: string[]): Expression[] => {
         if (!["number", "moveType"].includes(token.slice(1))) {
           throw new Error("could not parse token " + token);
         }
-        exp.push({
+        push({
           type: token.slice(1) as "number" | "moveType",
         } as ExpressionElement);
       } else {
-        exp.push({
-          type: "literals",
-          literals: token.split("|") as string[],
-        } as ExpressionElement);
+        const uniqueTokens = token.split("||");
+        // console.log("uniqueTokens", uniqueTokens);
+        const newExps: ExpressionElement[][] = [];
+        for (const unique of uniqueTokens) {
+          for (const exp of exps) {
+            // console.log("exp", exp);
+            const newExp = [...exp];
+            // console.log("newExp", newExp, newExps);
+            newExp.push({
+              type: "literals",
+              literals: unique.split("|") as string[],
+            } as ExpressionElement);
+            newExps.push(newExp);
+            // console.log(newExps);
+          }
+        }
+        exps = newExps;
+        // console.log(exps);
       }
+      // console.log(JSON.stringify(exps, null, 2));
     }
-    expressions.push(exp);
+    expressions = expressions.concat(exps);
   }
   return expressions;
 };
@@ -163,7 +181,7 @@ type ParsedToken =
       value: string;
     };
 
-const tokeniseCommand = (
+export const tokeniseCommand = (
   str: string,
   grammarStrings: string[]
 ): { result: ParsedToken[] | null; rest: string[] } => {
@@ -264,21 +282,23 @@ const matchesToken = (tok1: ParsedToken, tok2: ParsedToken) => {
   return false;
 };
 
+const matchesLiterals = (tok: ParsedToken, literals: string[]) => {
+  return tok.type === "literal" && literals.includes(tok.value);
+};
+
 const executeExpression = (expression: ParsedToken[]) => {
   if (
-    ((expression.length === 2 &&
-      matchesToken(expression[0], { type: "literal", value: "start" })) ||
-      matchesToken(expression[0], { type: "literal", value: "stop" })) &&
-    matchesToken(expression[1], { type: "literal", value: "mic" })
+    expression.length === 2 &&
+    matchesLiterals(expression[0], ["start", "stop"]) &&
+    matchesLiterals(expression[1], ["mic"])
   ) {
     chrome.runtime.sendMessage({
       type: `${expression[0].value}-mic`,
     });
     return true;
   } else if (
-    (expression.length === 2 &&
-      matchesToken(expression[0], { type: "literal", value: "back" })) ||
-    matchesToken(expression[0], { type: "literal", value: "forward" })
+    expression.length === 3 &&
+    matchesLiterals(expression[0], ["back", "forward"]) //editing mode
   ) {
     goBackOrForward(
       expression[0].value as "back" | "forward",
@@ -327,14 +347,31 @@ const executeExpression = (expression: ParsedToken[]) => {
     return true;
   } else if (
     expression.length === 2 &&
-    (matchesToken(expression[0], { type: "literal", value: "start" }) ||
-      matchesToken(expression[0], { type: "literal", value: "stop" })) &&
+    matchesLiterals(expression[0], ["start", "stop"]) &&
     matchesToken(expression[1], { type: "literal", value: "writing" })
   ) {
     console.log(`sending message ${expression[0].value}-writing`);
     chrome.runtime.sendMessage({
       type: `${expression[0].value}-writing`,
     });
+    return true;
+  } else if (
+    expression.length === 2 &&
+    matchesLiterals(expression[0], ["navigate"])
+  ) {
+    switch (expression[1].value) {
+      case "tab":
+        createNewTab();
+        break;
+      case "gmail":
+        goToUrl("https://mail.google.com");
+        break;
+      case "window":
+        break;
+      default:
+        console.error("unknown exp", expression);
+        break;
+    }
     return true;
   }
 };
@@ -348,15 +385,14 @@ export const executeCommand = (commandString: string, isWriting: boolean) => {
   ) {
     writeText(commandString);
   } else {
-    const { result: expression, rest } = tokeniseCommand(
+    const { result: tokenised, rest } = tokeniseCommand(
       commandString,
-      generalGrammar.concat(editorGrammar)
+      generalGrammar
     );
 
-    console.log("found expression", expression);
-
-    if (expression != null) {
-      return executeExpression(expression);
+    if (tokenised != null) {
+      console.log("found tokenised", tokenised);
+      return executeExpression(tokenised);
     }
 
     return false;

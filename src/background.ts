@@ -1,7 +1,7 @@
 import { executeCommand } from "./commands";
 import {
-  activeTab,
   createRecordTab,
+  getActiveTab,
   sendTabMessage,
   stopAllRecordTabs,
 } from "./utils";
@@ -17,7 +17,7 @@ const MicModes = {
   whisper: "whisper",
 };
 
-const MicMode = MicModes.whisper;
+const MicMode = MicModes.browser;
 let isWritingServer = false;
 
 chrome.runtime.onMessage.addListener(async function (
@@ -59,7 +59,7 @@ chrome.runtime.onMessage.addListener(async function (
       return;
     }
     console.log("speech-final", message);
-    const tab = await activeTab();
+    const tab = await getActiveTab();
     if (tab != null) {
       chrome.tabs.update(tab.id!, {
         active: true,
@@ -95,10 +95,10 @@ chrome.runtime.onMessage.addListener(async function (
     await stopAllRecordTabs();
   } else if (message.type === "start-writing") {
     isWritingServer = true;
-    sendTabMessage((await activeTab())?.id, "start-writing");
+    sendTabMessage((await getActiveTab())?.id, "start-writing");
   } else if (message.type === "stop-writing") {
     isWritingServer = false;
-    sendTabMessage((await activeTab())?.id, "stop-writing");
+    sendTabMessage((await getActiveTab())?.id, "stop-writing");
   } else if (message.type === "start-mic") {
     if (MicMode === MicModes.browser) {
       await stopAllRecordTabs();

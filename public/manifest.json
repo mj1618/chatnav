@@ -14,7 +14,7 @@
   "permissions": [
     "tabs",
     "windows",
-    "activeTab",
+    "getActiveTab",
     "offscreen",
     "background",
     "notifications",

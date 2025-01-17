@@ -318,6 +318,8 @@ async function startWorker() {
             new Date().getTime() - inferenceStartTime
           );
           inferenceStartTime = 0;
+          transcript.replaceAll(",", "");
+          transcript.replaceAll(".", "");
           if (speechStarted) {
             chrome.runtime.sendMessage({
               type: "interim-results",

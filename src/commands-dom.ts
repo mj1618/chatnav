@@ -9,6 +9,14 @@ declare global {
   }
 }
 
+function ifFrontend<T extends Function>(doFn: T) {
+  if (typeof window !== "undefined") {
+    return (...args: any[]) => doFn(...args);
+  } else {
+    return () => null;
+  }
+}
+
 export function isElementInViewport(el: HTMLElement) {
   if (el == null) {
     return false;
@@ -82,11 +90,7 @@ export function removeMessage() {
   }
 }
 
-export function showMessage(message: string) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
+export const showMessage = ifFrontend((message: string) => {
   removeMessage();
 
   window.container = document.createElement("div");
@@ -103,7 +107,7 @@ export function showMessage(message: string) {
   window.interval = setTimeout(() => {
     removeMessage();
   }, 5000);
-}
+});
 
 export function hideTags() {
   if (window.tagsContainer != null) {
@@ -163,12 +167,8 @@ function clickOnElement(tag: HTMLElement) {
   // tag.click()
 }
 
-export function clickOn(searchTerm: string, offset?: number) {
-  console.log("clickOn", searchTerm, offset);
-  if (typeof window === "undefined") {
-    console.log("not in browser for show tags");
-    return;
-  }
+export const clickOn = ifFrontend((searchTerm: string, offset?: number) => {
+  console.log("clickOn1", searchTerm, offset);
   hideTags();
   const tags = getTagsFor(searchTerm);
   if (tags.length === 1) {
@@ -181,7 +181,7 @@ export function clickOn(searchTerm: string, offset?: number) {
     console.log("found multiple tags", tags, offset);
     showTags(searchTerm);
   }
-}
+});
 
 export function getTagsFor(searchTerm?: string) {
   let found: { label: string; tag: Element }[] = [];
@@ -224,11 +224,7 @@ export function getTagsFor(searchTerm?: string) {
   return found;
 }
 
-export function showTags(searchTerm?: string) {
-  if (typeof window === "undefined") {
-    console.log("not in browser for show tags");
-    return;
-  }
+export const showTags = ifFrontend((searchTerm?: string) => {
   hideTags();
 
   window.currentSearchTerm = searchTerm;
@@ -251,13 +247,9 @@ export function showTags(searchTerm?: string) {
       );
     }
   }
-}
+});
 
-export function startWriting() {
-  if (typeof window === "undefined") {
-    console.log("not in browser for show tags");
-    return;
-  }
+export const startWriting = ifFrontend(() => {
   console.log("writing started");
   window.isWritingClient = true;
   window.text =
@@ -265,9 +257,9 @@ export function startWriting() {
       ? (document.activeElement as any | null).value
       : (document.activeElement as any | null)?.innerText;
   window.text = (window.text + " ").trim();
-}
+});
 
-export function stopWriting() {
+export const stopWriting = ifFrontend(() => {
   if (typeof window === "undefined") {
     console.log("not in browser for show tags");
     return;
@@ -275,7 +267,7 @@ export function stopWriting() {
   console.log("writing stopped");
   window.isWritingClient = false;
   window.text = "";
-}
+});
 
 export function writeToInputElement(
   element: HTMLInputElement | HTMLTextAreaElement,
@@ -301,12 +293,7 @@ export function writeToInputElement(
   } catch (e) {}
 }
 
-export function writeText(text: string) {
-  if (typeof window === "undefined") {
-    console.log("not in browser for show tags");
-    return;
-  }
-
+export const writeText = ifFrontend((text: string) => {
   if (document.activeElement == null) {
     console.error("no active element to write to");
     chrome.runtime.sendMessage({
@@ -326,14 +313,9 @@ export function writeText(text: string) {
   window.text += text;
   document.execCommand("selectAll", false);
   document.execCommand("insertText", false, window.text);
-}
+});
 
-export function writeInterimText(text: string) {
-  if (typeof window === "undefined") {
-    console.log("not in browser for show tags");
-    return;
-  }
-
+export const writeInterimText = ifFrontend((text: string) => {
   if (document.activeElement == null) {
     console.error("no active element to write to");
     chrome.runtime.sendMessage({
@@ -352,4 +334,4 @@ export function writeInterimText(text: string) {
   console.log("insertText", text);
   document.execCommand("selectAll", false);
   document.execCommand("insertText", false, window.text + text);
-}
+});

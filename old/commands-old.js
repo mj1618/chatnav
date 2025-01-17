@@ -1,5 +1,5 @@
 import wordsToNumbers from "words-to-numbers";
-import { activeTab } from "../src/utils";
+import { getActiveTab } from "../src/utils";
 
 const grammar = [
   "stop|start :microphone",
@@ -251,7 +251,7 @@ const generalCommandGroup: CommandGroup = {
           alternatives: ["mail", "gmail"],
           environment: "service-worker",
           action: async () => {
-            const tab = await activeTab();
+            const tab = await getActiveTab();
             if (tab != null) {
               chrome.tabs.update(tab.id!, {
                 url: "https://mail.google.com",
@@ -287,7 +287,7 @@ const generalCommandGroup: CommandGroup = {
           alternatives: ["back"],
           environment: "service-worker",
           action: async () => {
-            const tab = await activeTab();
+            const tab = await getActiveTab();
             if (tab != null) {
               chrome.tabs.goBack(tab.id!);
             }

@@ -79,7 +79,7 @@ export async function sendTabMessage(
   }
 }
 
-export const activeTab = async () => {
+export const getActiveTab = async () => {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tabs.length === 0) {
     console.log("no active tab");
