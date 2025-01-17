@@ -26,7 +26,7 @@ export default defineConfig({
         requestMic: "./request-mic.html",
         background: "./src/background.ts",
         "mic-test": "./mic-test.html",
-        // "offscreen-whisper": "./offscreen-whisper.html",
+        "offscreen-whisper": "./offscreen-whisper.html",
         // "offscreen-deepgram": "./offscreen-deepgram.html",
       },
       output: {

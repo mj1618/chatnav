@@ -7,6 +7,9 @@ import {
 } from "./utils";
 
 let triedPermission = false;
+let inFocus = true; // global boolean to keep track of state
+let isMicOn = false;
+let wasStartedLastFocus = false;
 
 const MicModes = {
   deepgram: "deepgram",
@@ -14,7 +17,7 @@ const MicModes = {
   whisper: "whisper",
 };
 
-const MicMode = MicModes.browser;
+const MicMode = MicModes.whisper;
 let isWritingServer = false;
 
 chrome.runtime.onMessage.addListener(async function (
@@ -79,9 +82,7 @@ chrome.runtime.onMessage.addListener(async function (
     chrome.action.setIcon({
       path: "assets/mic-red.png",
     });
-    // chrome.action.setBadgeText({
-    //   text: "Rec",
-    // });
+    isMicOn = true;
   } else if (message.type === "mic-turned-off") {
     chrome.action.setIcon({
       path: {
@@ -90,6 +91,7 @@ chrome.runtime.onMessage.addListener(async function (
         128: "assets/mic-black.png",
       },
     });
+    isMicOn = false;
     await stopAllRecordTabs();
   } else if (message.type === "start-writing") {
     isWritingServer = true;
@@ -97,6 +99,28 @@ chrome.runtime.onMessage.addListener(async function (
   } else if (message.type === "stop-writing") {
     isWritingServer = false;
     sendTabMessage((await activeTab())?.id, "stop-writing");
+  } else if (message.type === "start-mic") {
+    if (MicMode === MicModes.browser) {
+      await stopAllRecordTabs();
+      createRecordTab();
+    } else {
+      if (!(await isOffscreenRunning())) {
+        try {
+          chrome.offscreen.createDocument({
+            url: chrome.runtime.getURL(`offscreen-${MicMode}.html`),
+            // @ts-ignore
+            reasons: ["USER_MEDIA"],
+            justification: "capturing mic audio",
+          });
+        } catch (err) {
+          console.log("error creating offscreen document", err);
+        }
+      }
+    }
+  } else if (message.type === "stop-mic") {
+    if (MicMode === MicModes.browser) {
+      await stopAllRecordTabs();
+    }
   }
 });
 
@@ -113,23 +137,55 @@ const isOffscreenRunning = async () => {
 (async () => {
   if (MicMode === MicModes.deepgram || MicMode === MicModes.whisper) {
     if (!(await isOffscreenRunning())) {
-      chrome.offscreen.createDocument({
-        url: chrome.runtime.getURL(`offscreen-${MicMode}.html`),
-        // @ts-ignore
-        reasons: ["USER_MEDIA"],
-        justification: "capturing mic audio",
-      });
+      try {
+        chrome.offscreen
+          .createDocument({
+            url: chrome.runtime.getURL(`offscreen-${MicMode}.html`),
+            // @ts-ignore
+            reasons: ["USER_MEDIA"],
+            justification: "capturing mic audio",
+          })
+          .catch((err) => {
+            console.log("error creating offscreen document", err);
+          });
+      } catch (err) {
+        console.log("error creating offscreen document", err);
+      }
     }
   } else if (MicMode === MicModes.browser) {
     await stopAllRecordTabs();
     createRecordTab();
   }
 
-  chrome.action.setBadgeBackgroundColor({
-    color: "red",
-  });
-
   chrome.runtime.onStartup.addListener(() => {
     console.log(`prevent from going inactive`);
+  });
+
+  chrome.windows.onFocusChanged.addListener(async function (window) {
+    console.log(
+      "focus change, isFocussed:",
+      window != chrome.windows.WINDOW_ID_NONE
+    );
+    if (window == chrome.windows.WINDOW_ID_NONE) {
+      inFocus = false;
+      wasStartedLastFocus = isMicOn;
+      chrome.action.setIcon({
+        path: "assets/mic-black.png",
+      });
+      chrome.runtime.sendMessage({ type: "stop-mic" });
+    } else {
+      inFocus = true;
+      if (wasStartedLastFocus) {
+        if (MicMode === MicModes.browser) {
+          await stopAllRecordTabs();
+          createRecordTab();
+          chrome.action.setIcon({
+            path: "assets/mic-red.png",
+          });
+        } else {
+          chrome.runtime.sendMessage({ type: "start-mic" });
+        }
+      }
+    }
   });
 })();

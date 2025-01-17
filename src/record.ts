@@ -10,6 +10,7 @@ let triedPermission = false;
 let finals: string[] = [];
 let currentInterim = "";
 let shouldRestart = false;
+let lastStopped = -1;
 
 start();
 
@@ -124,12 +125,22 @@ function startSpeechRecognition() {
     }
   };
 
-  recognition.onend = function () {
-    console.log("speechRecognition onend");
+  recognition.onend = function (e) {
+    console.log("speechRecognition onend", e);
 
     if (shouldRestart) {
-      recognition.start();
+      if (lastStopped !== -1 && new Date().getTime() - lastStopped < 100) {
+        // thrashing
+        console.log("restarting too frequently, stopping");
+        chrome.runtime.sendMessage({
+          type: "mic-turned-off",
+        });
+      } else {
+        lastStopped = new Date().getTime();
+        recognition.start();
+      }
     } else {
+      lastStopped = new Date().getTime();
       isMicOn = false;
       chrome.runtime.sendMessage({
         type: "mic-turned-off",
@@ -173,3 +184,13 @@ function stop() {
     console.error("Error stopping mic", e);
   }
 }
+
+chrome.windows.onFocusChanged.addListener(function (currWindow) {
+  console.log(
+    "focus change, isFocussed:",
+    currWindow != chrome.windows.WINDOW_ID_NONE
+  );
+  if (currWindow == chrome.windows.WINDOW_ID_NONE) {
+    window.close();
+  }
+});
