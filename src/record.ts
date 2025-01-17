@@ -185,12 +185,12 @@ function stop() {
   }
 }
 
-chrome.windows.onFocusChanged.addListener(function (currWindow) {
-  console.log(
-    "focus change, isFocussed:",
-    currWindow != chrome.windows.WINDOW_ID_NONE
-  );
-  if (currWindow == chrome.windows.WINDOW_ID_NONE) {
-    window.close();
-  }
-});
+// chrome.windows.onFocusChanged.addListener(function (currWindow) {
+//   console.log(
+//     "focus change, isFocussed:",
+//     currWindow != chrome.windows.WINDOW_ID_NONE
+//   );
+//   if (currWindow == chrome.windows.WINDOW_ID_NONE) {
+//     window.close();
+//   }
+// });

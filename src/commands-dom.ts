@@ -4,7 +4,7 @@ declare global {
     container?: HTMLDivElement;
     tagsContainer?: HTMLDivElement;
     currentSearchTerm?: string;
-    isWritingClient?: boolean;
+    inputMode?: "general" | "writing" | "editing";
     text?: string;
   }
 }
@@ -251,7 +251,7 @@ export const showTags = ifFrontend((searchTerm?: string) => {
 
 export const startWriting = ifFrontend(() => {
   console.log("writing started");
-  window.isWritingClient = true;
+  window.inputMode = "writing";
   window.text =
     (document.activeElement as any | null)?.value != null
       ? (document.activeElement as any | null).value
@@ -260,12 +260,8 @@ export const startWriting = ifFrontend(() => {
 });
 
 export const stopWriting = ifFrontend(() => {
-  if (typeof window === "undefined") {
-    console.log("not in browser for show tags");
-    return;
-  }
   console.log("writing stopped");
-  window.isWritingClient = false;
+  window.inputMode = "general";
   window.text = "";
 });
 

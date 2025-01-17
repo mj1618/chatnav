@@ -29,6 +29,9 @@ export const stopAllRecordTabs = async () => {
   for (const tab of recordTabs) {
     await chrome.tabs.remove(tab.id!);
   }
+  chrome.runtime.sendMessage({
+    type: "mic-turned-off",
+  });
 };
 
 export async function createRecordTab() {

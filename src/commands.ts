@@ -376,11 +376,39 @@ const executeExpression = (expression: ParsedToken[]) => {
   }
 };
 
-export const executeCommand = (commandString: string, isWriting: boolean) => {
-  console.log("executing command", commandString, isWriting);
+const removeUpTo = (str: string, arr: string[]) => {
+  for (const a of arr) {
+    if (str.indexOf(a) != -1) {
+      return str.slice(str.lastIndexOf(a) + a.length);
+    }
+  }
+  return str;
+};
+
+export const executeCommand = (
+  commandString: string,
+  inputMode: "general" | "writing" | "editing"
+) => {
+  console.log("executing command", commandString, inputMode);
 
   if (
-    isWriting &&
+    inputMode === "writing" &&
+    ["stop writing", "stop righting"].some((x) => commandString.includes(x))
+  ) {
+    chrome.runtime.sendMessage({
+      type: "stop-writing",
+    });
+
+    inputMode = "general";
+
+    commandString = removeUpTo(commandString, [
+      "stop writing",
+      "stop righting",
+    ]);
+  }
+
+  if (
+    inputMode === "writing" &&
     !["stop writing", "stop righting"].some((x) => commandString.includes(x))
   ) {
     writeText(commandString);

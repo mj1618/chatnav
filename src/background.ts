@@ -11,14 +11,9 @@ let inFocus = true; // global boolean to keep track of state
 let isMicOn = false;
 let wasStartedLastFocus = false;
 
-const MicModes = {
-  deepgram: "deepgram",
-  browser: "browser",
-  whisper: "whisper",
-};
-
-const MicMode = MicModes.browser;
-let isWritingServer = false;
+let MicMode = "browser" as "browser" | "whisper" | "deepgram";
+let shouldTurnOffOnBlur = false;
+let inputMode = "general" as "general" | "writing" | "editing";
 
 chrome.runtime.onMessage.addListener(async function (
   message,
@@ -33,11 +28,11 @@ chrome.runtime.onMessage.addListener(async function (
       return;
     }
     triedPermission = true;
-    if (MicMode === MicModes.deepgram || MicMode === MicModes.whisper) {
+    if (MicMode === "deepgram" || MicMode === "whisper") {
       chrome.tabs.create({
         url: "request-mic.html",
       });
-    } else if (MicMode === MicModes.browser) {
+    } else if (MicMode === "browser") {
       chrome.tabs.create({
         url: "request-mic.html",
       });
@@ -67,15 +62,15 @@ chrome.runtime.onMessage.addListener(async function (
       sendTabMessage(tab.id!, "speech-final", message.message);
     }
 
-    executeCommand(message.message, isWritingServer);
+    executeCommand(message.message, inputMode);
     // const cmd = await findCommand(message.message, tab?.url);
     // if (cmd != null && cmd.environment === "service-worker") {
     //   cmd.action();
     // }
   } else if (message.type === "start-mic") {
-    if (MicMode === MicModes.deepgram || MicMode === MicModes.whisper) {
+    if (MicMode === "deepgram" || MicMode === "whisper") {
       // do nothing, offscreen is already running
-    } else if (MicMode === MicModes.browser) {
+    } else if (MicMode === "browser") {
       createRecordTab();
     }
   } else if (message.type === "mic-turned-on") {
@@ -85,22 +80,18 @@ chrome.runtime.onMessage.addListener(async function (
     isMicOn = true;
   } else if (message.type === "mic-turned-off") {
     chrome.action.setIcon({
-      path: {
-        16: "assets/mic-black.png",
-        48: "assets/mic-black.png",
-        128: "assets/mic-black.png",
-      },
+      path: "assets/mic-black.png",
     });
     isMicOn = false;
     await stopAllRecordTabs();
   } else if (message.type === "start-writing") {
-    isWritingServer = true;
+    inputMode = "writing";
     sendTabMessage((await getActiveTab())?.id, "start-writing");
   } else if (message.type === "stop-writing") {
-    isWritingServer = false;
+    inputMode = "general";
     sendTabMessage((await getActiveTab())?.id, "stop-writing");
   } else if (message.type === "start-mic") {
-    if (MicMode === MicModes.browser) {
+    if (MicMode === "browser") {
       await stopAllRecordTabs();
       createRecordTab();
     } else {
@@ -118,7 +109,11 @@ chrome.runtime.onMessage.addListener(async function (
       }
     }
   } else if (message.type === "stop-mic") {
-    if (MicMode === MicModes.browser) {
+    if (MicMode === "browser") {
+      isMicOn = false;
+      chrome.action.setIcon({
+        path: "assets/mic-black.png",
+      });
       await stopAllRecordTabs();
     }
   }
@@ -135,7 +130,7 @@ const isOffscreenRunning = async () => {
 };
 
 (async () => {
-  if (MicMode === MicModes.deepgram || MicMode === MicModes.whisper) {
+  if (MicMode === "deepgram" || MicMode === "whisper") {
     if (!(await isOffscreenRunning())) {
       try {
         chrome.offscreen
@@ -152,7 +147,7 @@ const isOffscreenRunning = async () => {
         console.log("error creating offscreen document", err);
       }
     }
-  } else if (MicMode === MicModes.browser) {
+  } else if (MicMode === "browser") {
     await stopAllRecordTabs();
     createRecordTab();
   }
@@ -168,20 +163,19 @@ const isOffscreenRunning = async () => {
     );
     if (window == chrome.windows.WINDOW_ID_NONE) {
       inFocus = false;
-      wasStartedLastFocus = isMicOn;
-      chrome.action.setIcon({
-        path: "assets/mic-black.png",
-      });
-      chrome.runtime.sendMessage({ type: "stop-mic" });
+      if (shouldTurnOffOnBlur) {
+        wasStartedLastFocus = isMicOn;
+        chrome.action.setIcon({
+          path: "assets/mic-black.png",
+        });
+        await stopAllRecordTabs();
+      }
     } else {
       inFocus = true;
-      if (wasStartedLastFocus) {
-        if (MicMode === MicModes.browser) {
+      if (wasStartedLastFocus && shouldTurnOffOnBlur) {
+        if (MicMode === "browser") {
           await stopAllRecordTabs();
           createRecordTab();
-          chrome.action.setIcon({
-            path: "assets/mic-red.png",
-          });
         } else {
           chrome.runtime.sendMessage({ type: "start-mic" });
         }

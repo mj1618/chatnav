@@ -18,7 +18,7 @@ console.log("loading content script1");
     return;
   }
   window.contentScriptIsLoaded = true;
-  window.isWritingClient = window.isWritingClient ?? false;
+  window.inputMode = window.inputMode ?? "general";
 
   // setInterval(() => {
   //   try {
@@ -60,7 +60,7 @@ console.log("loading content script1");
   ) {
     if (message.type === "interim-results") {
       showMessage(message.message);
-      if (window.isWritingClient === true) {
+      if (window.inputMode === "writing") {
         writeInterimText(message.message);
       }
     } else if (message.type === "speech-final") {
@@ -70,7 +70,7 @@ console.log("loading content script1");
       // if (cmd != null && cmd.environment === "content-script") {
       //   cmd.action();
       // }
-      executeCommand(message.message, window.isWritingClient === true);
+      executeCommand(message.message, window.inputMode!);
     } else if (message.type === "start-writing") {
       startWriting();
     } else if (message.type === "stop-writing") {
