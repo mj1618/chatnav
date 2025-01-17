@@ -5,6 +5,7 @@ import {
   stopWriting,
   writeInterimText,
 } from "./commands-dom";
+import { callGPT } from "./openai";
 
 declare global {
   interface Window {
@@ -12,7 +13,7 @@ declare global {
   }
 }
 console.log("loading content script1");
-(function () {
+(async function () {
   console.log("loading content script2");
   if (window.contentScriptIsLoaded) {
     return;

@@ -130,27 +130,27 @@ const isOffscreenRunning = async () => {
 };
 
 (async () => {
-  if (MicMode === "deepgram" || MicMode === "whisper") {
-    if (!(await isOffscreenRunning())) {
-      try {
-        chrome.offscreen
-          .createDocument({
-            url: chrome.runtime.getURL(`offscreen-${MicMode}.html`),
-            // @ts-ignore
-            reasons: ["USER_MEDIA"],
-            justification: "capturing mic audio",
-          })
-          .catch((err) => {
-            console.log("error creating offscreen document", err);
-          });
-      } catch (err) {
-        console.log("error creating offscreen document", err);
-      }
-    }
-  } else if (MicMode === "browser") {
-    await stopAllRecordTabs();
-    createRecordTab();
-  }
+  // if (MicMode === "deepgram" || MicMode === "whisper") {
+  //   if (!(await isOffscreenRunning())) {
+  //     try {
+  //       chrome.offscreen
+  //         .createDocument({
+  //           url: chrome.runtime.getURL(`offscreen-${MicMode}.html`),
+  //           // @ts-ignore
+  //           reasons: ["USER_MEDIA"],
+  //           justification: "capturing mic audio",
+  //         })
+  //         .catch((err) => {
+  //           console.log("error creating offscreen document", err);
+  //         });
+  //     } catch (err) {
+  //       console.log("error creating offscreen document", err);
+  //     }
+  //   }
+  // } else if (MicMode === "browser") {
+  //   await stopAllRecordTabs();
+  //   createRecordTab();
+  // }
 
   chrome.runtime.onStartup.addListener(() => {
     console.log(`prevent from going inactive`);

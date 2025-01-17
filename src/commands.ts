@@ -139,6 +139,9 @@ export const findNextMoveType = (tokens: string[]) => {
     };
   }
 };
+function isNumeric(str: string) {
+  return /^\d+$/.test(str);
+}
 
 export const findNextNumber = (tokens: string[]) => {
   const firstIdx = tokens
@@ -147,7 +150,8 @@ export const findNextNumber = (tokens: string[]) => {
     .findIndex((token) => allNumberWords.includes(token));
 
   for (const token of tokens) {
-    if (!Number.isNaN(token)) {
+    if (isNumeric(token)) {
+      console.log("is nan", token, Number.isNaN(token));
       return {
         token: Number(token),
         rest: tokens.slice(tokens.indexOf(token)),

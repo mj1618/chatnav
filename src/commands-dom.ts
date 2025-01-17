@@ -1,3 +1,5 @@
+import { smartFormat } from "./openai";
+
 declare global {
   interface Window {
     interval?: NodeJS.Timeout;
@@ -291,34 +293,37 @@ export function writeToInputElement(
   } catch (e) {}
 }
 
-export const writeText = ifFrontend((text: string) => {
-  text = window.text + " " + text + " ";
-  text = text.replace(" comma ", ", ");
-  text = text.replace(" period ", ". ");
-  text = text.replace(" full stop ", ". ");
-  text = text.replace(" question mark ", "? ");
-  text = text.replace(" semicolon ", "; ");
-  text = text.replace(" semi-colon ", "; ");
-  text = text.replace(" semi colon ", "; ");
-  text = text.replace(" colon ", ": ");
-  text = text.trim();
+let smartFormatInterval: ReturnType<typeof setTimeout> | null = null;
 
-  for (let i = 2; i < text.length; i++) {
-    if ([".", "?"].includes(text.charAt(i - 2))) {
-      text =
-        text.slice(0, i) + text.charAt(i).toUpperCase() + text.slice(i + 1);
-    }
-  }
+export const writeText = ifFrontend((text: string) => {
+  // text = window.text + " " + text + " ";
+  // text = text.replace(" comma ", ", ");
+  // text = text.replace(" period ", ". ");
+  // text = text.replace(" full stop ", ". ");
+  // text = text.replace(" question mark ", "? ");
+  // text = text.replace(" semicolon ", "; ");
+  // text = text.replace(" semi-colon ", "; ");
+  // text = text.replace(" semi colon ", "; ");
+  // text = text.replace(" colon ", ": ");
+  // text = text.trim();
+
+  // for (let i = 2; i < text.length; i++) {
+  //   if ([".", "?"].includes(text.charAt(i - 2))) {
+  //     text =
+  //       text.slice(0, i) + text.charAt(i).toUpperCase() + text.slice(i + 1);
+  //   }
+  // }
 
   console.log("insertText", text);
-  if (text.length === 0) {
+  if (text.trim().length === 0) {
     return;
   }
 
-  window.text = text.trim();
-  window.text = window.text!.charAt(0).toUpperCase() + window.text!.slice(1);
+  window.text = window.text + " " + text.trim();
+  // window.text = window.text!.charAt(0).toUpperCase() + window.text!.slice(1);
   document.execCommand("selectAll", false);
   document.execCommand("insertText", false, window.text);
+  smartFormatTimeout();
 });
 
 export const writeInterimText = ifFrontend((text: string) => {
@@ -326,3 +331,21 @@ export const writeInterimText = ifFrontend((text: string) => {
   document.execCommand("selectAll", false);
   document.execCommand("insertText", false, window.text + text);
 });
+
+const smartFormatTimeout = () => {
+  if (smartFormatInterval != null) {
+    clearTimeout(smartFormatInterval);
+  }
+  smartFormatInterval = setTimeout(async () => {
+    const text = window.text;
+    if (text == null || text.trim() === "") {
+      return;
+    }
+    const formatted = await smartFormat(text ?? "");
+    if (window.text === text) {
+      window.text = formatted;
+      document.execCommand("selectAll", false);
+      document.execCommand("insertText", false, window.text);
+    }
+  }, 1_000);
+};
